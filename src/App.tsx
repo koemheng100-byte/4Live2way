@@ -179,6 +179,14 @@ export default function App() {
       let audioStream: MediaStream;
 
       if (mode === 'screen') {
+        // បន្ថែមការការពារ៖ ពិនិត្យមើលថាតើអ្នកប្រើកំពុងបើកលើទូរស័ព្ទដៃ (Mobile) ឬអត់
+        const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
+        if (isMobile) {
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
+          setCaptureMode('mic');
+          return;
+        }
+
         stream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
@@ -283,6 +291,15 @@ export default function App() {
   };
 
   const handleCaptureModeChange = (mode: 'mic' | 'screen') => {
+    // ពិនិត្យឧបករណ៍ជាមុនសិន មុននឹងប្តូរ State ទៅជា Screen លើ Mobile
+    if (mode === 'screen') {
+      const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
+      if (isMobile) {
+        alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ។ សូមប្រើប្រាស់នៅលើកុំព្យូទ័រ (Desktop)។");
+        return;
+      }
+    }
+    
     setCaptureMode(mode);
     if (connected) {
       stopTranslation();
@@ -440,21 +457,21 @@ export default function App() {
         </div>
 
         {/* CONTROL BUTTONS */}
-        <div className="w-full z-10 pt-2">
+        <div className="w-full z-10 pt-2 pb-6">
           {connected ? (
             <button 
               onClick={stopTranslation}
               className="w-full h-14 px-8 rounded-2xl bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-400 font-semibold text-sm transition-all duration-200 active:scale-[0.99] flex items-center justify-center space-x-2"
             >
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></div>
-              <span>End Live Session</span>
+              <span>End Live Translator</span>
             </button>
           ) : (
             <button 
               onClick={() => startTranslation(sourceLang, targetLang, captureMode)}
               className="w-full h-14 px-8 rounded-2xl bg-[#4F7CFF] hover:bg-[#3B66F0] text-white font-semibold text-sm transition-all duration-200 shadow-lg shadow-blue-600/10 active:scale-[0.99] flex items-center justify-center"
             >
-              Start Live Session
+              Live Translator
             </button>
           )}
         </div>
