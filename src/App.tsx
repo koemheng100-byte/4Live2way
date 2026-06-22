@@ -167,9 +167,8 @@ export default function App() {
   };
 
   const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode) => {
-    // បង្ខំឱ្យអ្នកប្រើប្រាស់កំណត់ API Key ជាមុនសិន
-    const savedKey = localStorage.getItem('gemini_live_api_key');
-    if (!savedKey) {
+    // ពិនិត្យមើលតម្លៃ apiKey ក្នុង State ជំនួសវិញដើម្បីភាពរហ័ស
+    if (!apiKey.trim()) {
       setIsSettingsOpen(true);
       alert("សូមកំណត់ និងរក្សាទុក Gemini API Key របស់អ្នកជាមុនសិន!");
       return;
@@ -208,8 +207,10 @@ export default function App() {
       mediaStreamRef.current = audioStream;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       
-      // បញ្ជូន API Key ទៅតាម Query String
-      const ws = new WebSocket(`${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&apiKey=${encodeURIComponent(savedKey)}`);
+      // បញ្ជូន API Key ចេញពី State ដោយផ្ទាល់ ជាមួយការការពារសុវត្ថិភាព String
+      const ws = new WebSocket(
+        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&apiKey=${encodeURIComponent(apiKey.trim() || "")}`
+      );
       wsRef.current = ws;
 
       const inputAudioCtx = new AudioContext({ latencyHint: "interactive", sampleRate: 16000 });
