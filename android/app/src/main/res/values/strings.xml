@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">KH Live Translator</string>
+    <string name="title_activity_main">KH Live Translator</string>
+    <string name="package_name">com.koemheng.livetranslator</string>
+    <string name="custom_url_scheme">com.koemheng.livetranslator</string>
+</resources>
