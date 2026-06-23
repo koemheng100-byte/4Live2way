@@ -4,7 +4,6 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react'; // 👈 ប្រព័ន្ធបង្កើត Dynamic QR ដោយស្វ័យប្រវត្តិតាមកូដ
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -208,7 +207,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ。");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
           setCaptureMode('mic');
           return;
         }
@@ -348,7 +347,7 @@ export default function App() {
   const getLanguageLabel = (code: string) => {
     const labels: Record<string, string> = {
       km: 'ខ្មែរ (Khmer)', en: 'អង់គ្លេស (English)', zh: 'ចិន (Chinese)', 'zh-HK': 'ចិនកាតាំង (Cantonese)',
-      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរែ (Korean)', th: 'ថៃ (Thai)',
+      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរ៉េ (Korean)', th: 'ថៃ (Thai)',
       id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡេស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
       de: 'អាល្លឺម៉ង់ (German)', no: 'ន័រវែស (Norwegian)', hi: 'ហិណ្ឌី (Hindi)', fil: 'ហ្វីលីពិន (Filipino)',
       mn: 'ម៉ុងហ្គោលី (Mongolian)', it: 'អ៊ីតាលី (Italian)', he: 'ហេប្រឺ (Hebrew)', ru: 'រុស្ស៊ី (Russian)', my: 'ភូមា (Burmese)'
@@ -765,7 +764,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ជំហានទី ៣៖ បង្ហាញប្រព័ន្ធបង្កើត Dynamic QR Code ការ៉េស្អាតស្វ័យប្រវត្តិតាមកូដ */}
+            {/* ជំហានទី ៣៖ បង្ហាញរូបភាព QR Code ពិតប្រាកដរបស់ធនាគារ */}
             {payStep === 3 && selectedPlan && (
               <div>
                 <h3 className="text-base font-bold text-white mb-1">ស្កេនទូទាត់ប្រាក់ {selectedPlan.price}</h3>
@@ -773,7 +772,7 @@ export default function App() {
                   {calculateDatesText(selectedPlan.days)}
                 </p>
 
-                {/* ប៊ូតុងរើសធនាគារដើម្បីបង្កើត QR Code ជាក់លាក់ */}
+                {/* ប៊ូតុងរើសធនាគារដើម្បីផ្លាស់ប្តូរការបង្ហាញរូបភាព QR ជាក់លាក់ */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button 
                     onClick={() => setActiveBank('aba')}
@@ -797,17 +796,16 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* ប្រអប់គូររូបភាព QR Code SVG រាងការ៉េស្អាតឥតខ្ចោះ មិនចេះខូចគែម */}
-                <div className="bg-white p-4 rounded-2xl w-[220px] h-[220px] mx-auto mb-3 shadow-md flex items-center justify-center">
-                  <QRCodeSVG 
-                    // លីងធនាគារនឹងបូកតម្លៃលុយបញ្ចូលគ្នាដោយស្វ័យប្រវត្តិតាមកញ្ចប់ដែលភ្ញៀវបានរើស
-                    value={activeBank === 'aba' 
-                      ? `https://link.payway.com.kh/ABAPAYpI465740K`
-                      : `https://www.acledabank.com.kh/your-acleda-id?amount=${selectedPlan.price.replace('$', '')}`
+                {/* ✅ កូដបង្ហាញរូបភាព QR ពិតប្រាកដរបស់អ្នក (ដោះស្រាយបញ្ហាស្កេនមិនស្គាល់) */}
+                <div className="bg-white p-2 rounded-2xl max-w-[280px] mx-auto mb-3 shadow-md overflow-hidden flex items-center justify-center">
+                  <img 
+                    src={activeBank === 'aba' 
+                      ? "https://i.postimg.cc/ZKbZMfwm/photo-2026-06-24-00-14-01.jpg" // 👈 រូបភាព QR ABA របស់បង
+                      : "https://i.postimg.cc/FRXXgGY6/photo-2026-06-24-00-38-54.jpg" // 👈 រូបភាព QR Acleda របស់បង
                     } 
-                    size={190}
-                    level="H"
-                    includeMargin={false}
+                    alt="Payment QR Code" 
+                    className="w-full h-auto object-contain rounded-xl mx-auto"
+                    style={{ maxHeight: '360px' }} // កំណត់កម្ពស់ឱ្យវែងសមល្មមនឹងរូបរាង QR ដើមរបស់ធនាគារខ្មែរ
                   />
                 </div>
 
@@ -838,7 +836,7 @@ export default function App() {
                 <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3">
                   <Phone size={20} />
                 </div>
-                <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រេចចិត្ត)</h3>
+                <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រចិត្ត)</h3>
                 <p className="text-xs text-slate-400 mb-4 leading-relaxed">
                   ងាយស្រួលសម្រាប់ការផ្ទៀងផ្ទាត់ និងជួយសម្រួលពេលមានបញ្ហា។ អ្នកអាចខ្វែងចោល [✕] ក៏បាន។
                 </p>
