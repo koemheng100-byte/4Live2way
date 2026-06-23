@@ -23,6 +23,7 @@ const pcmToBase64 = (pcm: Float32Array): string => {
 
 export default function App() {
   const [connected, setConnected] = useState(false);
+  const [restarting, setRestarting] = useState(false); // 1. Added restarting state
   const [sourceLang, setSourceLang] = useState('km');
   const [targetLang, setTargetLang] = useState('en');
   const [captureMode, setCaptureMode] = useState<'mic' | 'screen'>('mic');
@@ -271,18 +272,26 @@ export default function App() {
         }
       };
 
-      ws.onopen = () => setConnected(true);
+      // 3. Modified ws.onopen to turn off restarting indicator
+      ws.onopen = () => {
+        setConnected(true);
+        setRestarting(false);
+      };
+      
       ws.onclose = () => setConnected(false);
     } catch (err) {
       console.error("Error starting translation", err);
       setConnected(false);
+      setRestarting(false);
     }
   };
 
+  // 2. Modified changeLanguages to set restarting state
   const changeLanguages = (newSource: string, newTarget: string) => {
     setSourceLang(newSource);
     setTargetLang(newTarget);
     if (connected) {
+      setRestarting(true);
       stopTranslation();
       setTimeout(() => {
         startTranslation(newSource, newTarget, captureMode);
@@ -483,9 +492,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* Sub-text guide prompt */}
+            {/* Sub-text guide prompt (Updated Robot text conditional handling) */}
             <p className="text-[11px] text-center text-slate-400 max-w-[260px] leading-relaxed mt-3">
-              {connected 
+              {restarting
+                ? "កំពុងអនុវត្តភាសាថ្មី..."
+                : connected 
                 ? "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ"
                 : "សូមចុចប៊ូតុង Live Translator ដើម្បីចាប់ផ្តើមបកប្រែ"
               }
@@ -505,7 +516,6 @@ export default function App() {
         </div>
 
         {/* LOWER CENTER: LIVE TRANSLATOR PREMIUM CIRCULAR ORB */}
-        {/* Adjusted placement to align the button precisely within 65%-70% of the viewport and leave over 120px safety padding at the bottom */}
         <div className="w-full flex justify-center items-center pt-4 pb-[130px] relative">
           
           {/* Wave Sound Vector Bars (Left and Right) */}
@@ -562,8 +572,14 @@ export default function App() {
               <div className="absolute -inset-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 blur opacity-40 group-hover:opacity-70 transition duration-1000" />
               <div className="absolute -inset-3 rounded-full border border-blue-500/20 opacity-60" />
 
+              {/* 4. Added disabled property and prevention check */}
               <button 
-                onClick={() => startTranslation(sourceLang, targetLang, captureMode)}
+                disabled={restarting}
+                onClick={() => {
+                  if (!restarting) {
+                    startTranslation(sourceLang, targetLang, captureMode);
+                  }
+                }}
                 className="
                   w-[140px] h-[140px] md:w-[180px] md:h-[180px]
                   rounded-full
@@ -575,14 +591,32 @@ export default function App() {
                   hover:scale-105 active:scale-95
                   flex flex-col items-center justify-center select-none p-2
                   animate-breathe
+                  disabled:opacity-80 disabled:cursor-not-allowed
                 "
               >
                 {/* Premium Translation Custom Styled Icon */}
                 <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
                 
-                {/* Text Typography */}
-                <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">Live</span>
-                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
+                {/* 5. Dynamically updated inner button copy depending on restarting state */}
+                {restarting ? (
+                  <>
+                    <span className="text-[11px] text-cyan-100">
+                      Applying
+                    </span>
+                    <span className="text-sm font-bold text-white">
+                      New Language...
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">
+                      Live
+                    </span>
+                    <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">
+                      Translator
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           )}
