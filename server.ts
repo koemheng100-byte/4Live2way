@@ -56,20 +56,35 @@ async function startServer() {
       }
     });
 
+    // បន្ថែមកូដសម្គាល់ឈ្មោះភាសាទាំង ២១ សម្រាប់ប្រើប្រាស់ក្នុង System Instruction របស់ AI
     const langNames: Record<string, string> = {
       'km': 'Khmer', 
       'en': 'English', 
-      'zh': 'Chinese', 
+      'zh': 'Chinese (Mandarin)',
+      'zh-HK': 'Cantonese',
       'vi': 'Vietnamese', 
       'ja': 'Japanese', 
       'ko': 'Korean', 
-      'th': 'Thai'
+      'th': 'Thai',
+      'id': 'Indonesian',
+      'ms': 'Malay',
+      'lo': 'Lao',
+      'fr': 'French',
+      'de': 'German',
+      'no': 'Norwegian',
+      'hi': 'Hindi',
+      'fil': 'Filipino',
+      'mn': 'Mongolian',
+      'it': 'Italian',
+      'he': 'Hebrew',
+      'ru': 'Russian',
+      'my': 'Burmese'
     };
 
     const lang1Name = langNames[source] || source;
     const lang2Name = langNames[target] || target;
 
-    // បានកែប្រែប្រព័ន្ធណែនាំ (System Instruction) ឱ្យមានភាពម៉ត់ចត់ជាងមុន
+    // ប្រព័ន្ធណែនាំ (System Instruction) ឱ្យមានភាពម៉ត់ចត់ជាងមុន
     const systemInstruction = `
 You are a strict real-time translator.
 

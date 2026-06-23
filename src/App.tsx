@@ -318,6 +318,34 @@ export default function App() {
     }
   };
 
+  // មុខងារជំនួយសម្រាប់បង្ហាញឈ្មោះភាសាជា ខ្មែរ (អង់គ្លេស) នៅក្នុង Label រវាង Source និង Target
+  const getLanguageLabel = (code: string) => {
+    const labels: Record<string, string> = {
+      km: 'ខ្មែរ (Khmer)',
+      en: 'អង់គ្លេស (English)',
+      zh: 'ចិន (Chinese)',
+      'zh-HK': 'ចិនកាតាំង (Cantonese)',
+      vi: 'វៀតណាម (Vietnamese)',
+      ja: 'ជប៉ុន (Japanese)',
+      ko: 'កូរ៉េ (Korean)',
+      th: 'ថៃ (Thai)',
+      id: 'ឥណ្ឌូនេស៊ី (Indonesian)',
+      ms: 'ម៉ាឡេស៊ី (Malay)',
+      lo: 'ឡាវ (Lao)',
+      fr: 'បារាំង (French)',
+      de: 'អាល្លឺម៉ង់ (German)',
+      no: 'ន័រវែស (Norwegian)',
+      hi: 'ហិណ្ឌី (Hindi)',
+      fil: 'ហ្វីលីពិន (Filipino)',
+      mn: 'ម៉ុងហ្គោលី (Mongolian)',
+      it: 'អ៊ីតាលី (Italian)',
+      he: 'ហេប្រឺ (Hebrew)',
+      ru: 'រុស្ស៊ី (Russian)',
+      my: 'ភូមា (Burmese)'
+    };
+    return labels[code] || code;
+  };
+
   return (
     <div className="w-full h-screen bg-[#060913] text-[#FFFFFF] font-['Inter','Noto_Sans_Khmer',sans-serif] flex flex-col overflow-hidden relative antialiased">
       
@@ -409,80 +437,102 @@ export default function App() {
         {/* LANGUAGE SELECTOR */}
         <div className="w-full flex items-center justify-center space-x-2 bg-white/5 border border-white/10 backdrop-blur-xl rounded-full p-1 shadow-sm mb-4">
           <div className="flex-1 relative flex justify-center">
-            <span className="text-xs font-semibold px-4 py-1.5 text-white capitalize">
-              {sourceLang === 'km' ? 'Khmer' : sourceLang === 'en' ? 'English' : sourceLang === 'zh' ? 'Chinese' : sourceLang === 'vi' ? 'Vietnamese' : sourceLang === 'ja' ? 'Japanese' : sourceLang === 'ko' ? 'Korean' : sourceLang === 'th' ? 'Thai' : sourceLang}
+            <span className="text-xs font-semibold px-4 py-1.5 text-white text-center block truncate max-w-[140px]">
+              {getLanguageLabel(sourceLang)}
             </span>
             <select
               className="absolute inset-0 opacity-0 w-full cursor-pointer bg-[#171A21] text-white"
               value={sourceLang}
               onChange={(e) => changeLanguages(e.target.value, targetLang)}
             >
-              <option value="km" className="bg-[#171A21] text-white">Khmer</option>
-              <option value="en" className="bg-[#171A21] text-white">English</option>
-              <option value="zh" className="bg-[#171A21] text-white">Chinese</option>
-              <option value="vi" className="bg-[#171A21] text-white">Vietnamese</option>
-              <option value="ja" className="bg-[#171A21] text-white">Japanese</option>
-              <option value="ko" className="bg-[#171A21] text-white">Korean</option>
-              <option value="th" className="bg-[#171A21] text-white">Thai</option>
+              <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
+              <option value="en" className="bg-[#171A21] text-white">អង់គ្លេស (English)</option>
+              <option value="zh" className="bg-[#171A21] text-white">ចិន (Chinese)</option>
+              <option value="zh-HK" className="bg-[#171A21] text-white">ចិនកាតាំង (Cantonese)</option>
+              <option value="vi" className="bg-[#171A21] text-white">វៀតណាម (Vietnamese)</option>
+              <option value="ja" className="bg-[#171A21] text-white">ជប៉ុន (Japanese)</option>
+              <option value="ko" className="bg-[#171A21] text-white">កូរ៉េ (Korean)</option>
+              <option value="th" className="bg-[#171A21] text-white">ថៃ (Thai)</option>
+              <option value="id" className="bg-[#171A21] text-white">ឥណ្ឌូនេស៊ី (Indonesian)</option>
+              <option value="ms" className="bg-[#171A21] text-white">ម៉ាឡេស៊ី (Malay)</option>
+              <option value="lo" className="bg-[#171A21] text-white">ឡាវ (Lao)</option>
+              <option value="fr" className="bg-[#171A21] text-white">បារាំង (French)</option>
+              <option value="de" className="bg-[#171A21] text-white">អាល្លឺម៉ង់ (German)</option>
+              <option value="no" className="bg-[#171A21] text-white">ន័រវែស (Norwegian)</option>
+              <option value="hi" className="bg-[#171A21] text-white">ហិណ្ឌី (Hindi)</option>
+              <option value="fil" className="bg-[#171A21] text-white">ហ្វីលីពិន (Filipino)</option>
+              <option value="mn" className="bg-[#171A21] text-white">ម៉ុងហ្គោលី (Mongolian)</option>
+              <option value="it" className="bg-[#171A21] text-white">អ៊ីតាលី (Italian)</option>
+              <option value="he" className="bg-[#171A21] text-white">ហេប្រឺ (Hebrew)</option>
+              <option value="ru" className="bg-[#171A21] text-white">រុស្ស៊ី (Russian)</option>
+              <option value="my" className="bg-[#171A21] text-white">ភូមា (Burmese)</option>
             </select>
           </div>
           
-          <div className="text-[#A1A1AA] p-1 bg-[#171A21] rounded-full border border-white/5">
+          <div className="text-[#A1A1AA] p-1 bg-[#171A21] rounded-full border border-white/5 flex-shrink-0">
             <ArrowLeftRight size={12} />
           </div>
 
           <div className="flex-1 relative flex justify-center">
-            <span className="text-xs font-semibold px-4 py-1.5 text-white capitalize">
-              {targetLang === 'en' ? 'English' : targetLang === 'km' ? 'Khmer' : targetLang === 'zh' ? 'Chinese' : targetLang === 'vi' ? 'Vietnamese' : targetLang === 'ja' ? 'Japanese' : targetLang === 'ko' ? 'Korean' : targetLang === 'th' ? 'Thai' : targetLang}
+            <span className="text-xs font-semibold px-4 py-1.5 text-white text-center block truncate max-w-[140px]">
+              {getLanguageLabel(targetLang)}
             </span>
             <select
               className="absolute inset-0 opacity-0 w-full cursor-pointer bg-[#171A21] text-white"
               value={targetLang}
               onChange={(e) => changeLanguages(sourceLang, e.target.value)}
             >
-              <option value="km" className="bg-[#171A21] text-white">Khmer</option>
-              <option value="en" className="bg-[#171A21] text-white">English</option>
-              <option value="zh" className="bg-[#171A21] text-white">Chinese</option>
-              <option value="vi" className="bg-[#171A21] text-white">Vietnamese</option>
-              <option value="ja" className="bg-[#171A21] text-white">Japanese</option>
-              <option value="ko" className="bg-[#171A21] text-white">Korean</option>
-              <option value="th" className="bg-[#171A21] text-white">Thai</option>
+              <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
+              <option value="en" className="bg-[#171A21] text-white">អង់គ្លេស (English)</option>
+              <option value="zh" className="bg-[#171A21] text-white">ចិន (Chinese)</option>
+              <option value="zh-HK" className="bg-[#171A21] text-white">ចិនកាតាំង (Cantonese)</option>
+              <option value="vi" className="bg-[#171A21] text-white">វៀតណាម (Vietnamese)</option>
+              <option value="ja" className="bg-[#171A21] text-white">ជប៉ុន (Japanese)</option>
+              <option value="ko" className="bg-[#171A21] text-white">កូរ៉េ (Korean)</option>
+              <option value="th" className="bg-[#171A21] text-white">ថៃ (Thai)</option>
+              <option value="id" className="bg-[#171A21] text-white">ឥណ្ឌូនេស៊ី (Indonesian)</option>
+              <option value="ms" className="bg-[#171A21] text-white">ម៉ាឡេស៊ី (Malay)</option>
+              <option value="lo" className="bg-[#171A21] text-white">ឡាវ (Lao)</option>
+              <option value="fr" className="bg-[#171A21] text-white">បារាំង (French)</option>
+              <option value="de" className="bg-[#171A21] text-white">អាល្លឺម៉ង់ (German)</option>
+              <option value="no" className="bg-[#171A21] text-white">ន័រវែស (Norwegian)</option>
+              <option value="hi" className="bg-[#171A21] text-white">ហិណ្ឌី (Hindi)</option>
+              <option value="fil" className="bg-[#171A21] text-white">ហ្វីលីពិន (Filipino)</option>
+              <option value="mn" className="bg-[#171A21] text-white">ម៉ុងហ្គោលី (Mongolian)</option>
+              <option value="it" className="bg-[#171A21] text-white">អ៊ីតាលី (Italian)</option>
+              <option value="he" className="bg-[#171A21] text-white">ហេប្រឺ (Hebrew)</option>
+              <option value="ru" className="bg-[#171A21] text-white">រុស្ស៊ី (Russian)</option>
+              <option value="my" className="bg-[#171A21] text-white">ភូមា (Burmese)</option>
             </select>
           </div>
         </div>
 
-        {/* ROBOT HEAD UI SECTION (Dynamic Expression Styles) */}
+        {/* ROBOT HEAD UI SECTION */}
         <div className="flex flex-col items-center justify-center pt-2 pb-4">
           <div className="relative flex flex-col items-center">
             
-            {/* Robot Chassis/Outer Ring */}
             <div className={`w-32 h-24 rounded-[40px] bg-gradient-to-b from-[#1E293B] to-[#0F172A] border-[3px] flex items-center justify-center p-4 shadow-2xl transition-all duration-300 relative
               ${connected 
                 ? 'border-[#4F7CFF] shadow-[0_0_30px_rgba(79,124,255,0.4)]' 
                 : 'border-[#334155] shadow-black'
               }`}
             >
-              {/* Antenna */}
               <div className="absolute -top-4 w-1 h-4 bg-slate-500 left-1/2 -translate-x-1/2">
                 <div className={`absolute -top-2 w-3 h-3 rounded-full left-1/2 -translate-x-1/2 shadow-lg transition-colors duration-300
                   ${connected ? 'bg-[#4F7CFF] shadow-[0_0_10px_#4F7CFF]' : 'bg-slate-400'}`} 
                 />
               </div>
 
-              {/* Ears */}
               <div className="absolute -left-2.5 w-2 h-8 bg-slate-600 rounded-l-md top-1/2 -translate-y-1/2" />
               <div className="absolute -right-2.5 w-2 h-8 bg-slate-600 rounded-r-md top-1/2 -translate-y-1/2" />
 
-              {/* Black Visor Screen */}
               <div className="w-full h-full bg-[#090D1A] rounded-[24px] border border-white/5 flex items-center justify-center gap-6 px-4">
-                {/* Left Eye */}
                 <div className={`w-5 h-5 rounded-full transition-all duration-300
                   ${connected 
                     ? 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
                     : 'bg-[#2E5BFF] shadow-[0_0_10px_rgba(46,91,255,0.6)]'
                   }`} 
                 />
-                {/* Right Eye */}
                 <div className={`w-5 h-5 rounded-full transition-all duration-300
                   ${connected 
                     ? 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
@@ -492,7 +542,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Sub-text guide prompt (Updated Robot text conditional handling) */}
             <p className="text-[11px] text-center text-slate-400 max-w-[260px] leading-relaxed mt-3">
               {restarting
                 ? "កំពុងអនុវត្តភាសាថ្មី..."
@@ -518,7 +567,6 @@ export default function App() {
         {/* LOWER CENTER: LIVE TRANSLATOR PREMIUM CIRCULAR ORB */}
         <div className="w-full flex justify-center items-center pt-4 pb-[130px] relative">
           
-          {/* Wave Sound Vector Bars (Left and Right) */}
           {connected && (
             <>
               <div className="absolute left-4 md:left-12 flex items-center gap-1 h-10">
@@ -537,9 +585,7 @@ export default function App() {
           )}
 
           {connected ? (
-            /* ACTIVE / STOP STATE ORB */
             <div className="relative flex items-center justify-center">
-              {/* Outer pulsing neon ring overlay */}
               <div className="absolute -inset-2 rounded-full border border-red-500/40 animate-ping opacity-75" style={{ animationDuration: '1.8s' }} />
               <div className="absolute -inset-4 rounded-full border border-red-600/20 animate-ping opacity-40" style={{ animationDuration: '2.5s' }} />
 
@@ -557,22 +603,16 @@ export default function App() {
                   flex flex-col items-center justify-center select-none p-2
                 "
               >
-                {/* Translation Icon */}
                 <Languages size={24} className="mb-1 text-red-100 md:w-7 md:h-7 drop-shadow-md" />
-                
-                {/* Text Typography */}
                 <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-red-100/90 leading-tight">Stop</span>
                 <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
               </button>
             </div>
           ) : (
-            /* IDLE STATE PREMIUM BLUE ORB */
             <div className="relative flex items-center justify-center">
-              {/* Multiple Glowing Rings */}
               <div className="absolute -inset-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 blur opacity-40 group-hover:opacity-70 transition duration-1000" />
               <div className="absolute -inset-3 rounded-full border border-blue-500/20 opacity-60" />
 
-              {/* 4. Added disabled property and prevention check */}
               <button 
                 disabled={restarting}
                 onClick={() => {
@@ -594,27 +634,17 @@ export default function App() {
                   disabled:opacity-80 disabled:cursor-not-allowed
                 "
               >
-                {/* Premium Translation Custom Styled Icon */}
                 <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
                 
-                {/* 5. Dynamically updated inner button copy depending on restarting state */}
                 {restarting ? (
                   <>
-                    <span className="text-[11px] text-cyan-100">
-                      Applying
-                    </span>
-                    <span className="text-sm font-bold text-white">
-                      New Language...
-                    </span>
+                    <span className="text-[11px] text-cyan-100">Applying</span>
+                    <span className="text-sm font-bold text-white">New Language...</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">
-                      Live
-                    </span>
-                    <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">
-                      Translator
-                    </span>
+                    <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">Live</span>
+                    <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
                   </>
                 )}
               </button>
@@ -630,12 +660,11 @@ export default function App() {
         </div>
       )}
 
-      {/* PREMIUM SETTINGS MODAL (API KEY MANAGEMENT) */}
+      {/* PREMIUM SETTINGS MODAL */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fadeIn p-4">
           <div className="bg-[#171A21] w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
             
-            {/* Modal Header */}
             <div className="p-5 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Settings size={16} className="text-[#4F7CFF]" />
@@ -649,12 +678,10 @@ export default function App() {
               </button>
             </div>
 
-            {/* Modal Body */}
             <div className="p-5 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider text-[#A1A1AA] font-bold">Gemini API Key</label>
                 
-                {/* Input Wrapper */}
                 <div className="relative flex items-center">
                   <input
                     type={showKey ? "text" : "password"}
@@ -673,7 +700,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Status Test Connection */}
               {testStatus !== 'idle' && (
                 <div className={`p-3 rounded-xl border text-xs flex items-center space-x-2 ${
                   testStatus === 'testing' ? 'bg-yellow-500/5 border-yellow-500/20 text-yellow-400' :
@@ -691,7 +717,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
                   onClick={handleSaveKey}
