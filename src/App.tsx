@@ -4,6 +4,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react'; // 👈 ប្រព័ន្ធបង្កើត Dynamic QR ដោយស្វ័យប្រវត្តិតាមកូដ
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -48,13 +49,14 @@ export default function App() {
 
   // --- STATE បន្ថែមថ្មី សម្រាប់ប្រព័ន្ធគ្រប់គ្រងការបង់ប្រាក់ និង NO-AUTH ID ---
   const [userId, setUserId] = useState<string>("");
-  const [isPaid, setIsPaid] = useState<boolean>(true); // សន្មតថាតាមដានស្ថានភាពជាមុនសិន
+  const [isPaid, setIsPaid] = useState<boolean>(true); // សន្មតថាតានដានស្ថានភាពជាមុនសិន
   const [showPayModal, setShowPayModal] = useState<boolean>(false);
   const [payStep, setPayStep] = useState<number>(1); // 1: បង្ហាញ ID, 2: ជ្រើសរើសរយៈពេល, 3: ជ្រើសរើសធនាគារ/QR, 4: ដាក់លេខទូរសព្ទ
   const [selectedPlan, setSelectedPlan] = useState<{ name: string; price: string; days: number } | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [inputPhone, setInputPhone] = useState<string>("");
   const [expiryText, setExpiryText] = useState<string>("");
+  const [activeBank, setActiveBank] = useState<'aba' | 'acleda'>('aba'); // ចំណាំធនាគារដែលកំពុងជ្រើសរើស
 
   // ១. បង្កើត ID ម៉ាស៊ីន និងឆែកស្ថានភាពបង់ប្រាក់ពេលបើកកម្មវិធីភ្លាម
   useEffect(() => {
@@ -206,7 +208,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ。");
           setCaptureMode('mic');
           return;
         }
@@ -346,7 +348,7 @@ export default function App() {
   const getLanguageLabel = (code: string) => {
     const labels: Record<string, string> = {
       km: 'ខ្មែរ (Khmer)', en: 'អង់គ្លេស (English)', zh: 'ចិន (Chinese)', 'zh-HK': 'ចិនកាតាំង (Cantonese)',
-      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរ៉េ (Korean)', th: 'ថៃ (Thai)',
+      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរែ (Korean)', th: 'ថៃ (Thai)',
       id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡេស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
       de: 'អាល្លឺម៉ង់ (German)', no: 'ន័រវែស (Norwegian)', hi: 'ហិណ្ឌី (Hindi)', fil: 'ហ្វីលីពិន (Filipino)',
       mn: 'ម៉ុងហ្គោលី (Mongolian)', it: 'អ៊ីតាលី (Italian)', he: 'ហេប្រឺ (Hebrew)', ru: 'រុស្ស៊ី (Russian)', my: 'ភូមា (Burmese)'
@@ -365,7 +367,7 @@ export default function App() {
         }
         @keyframes blink {
           0%, 90%, 100% { transform: scaleY(1); }
-          95% { transform: scaleY(0.1); }
+          55% { transform: scaleY(0.1); }
         }
         @keyframes wave-height {
           0%, 100% { height: 6px; opacity: 0.4; }
@@ -687,7 +689,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-[#111625] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center relative shadow-2xl">
             
-            {/* ប៊ូតុងខ្វែងបិទ [X] លេចឡើងតែនៅជំហានទី 1 (ឬបើចង់ឱ្យបិទបានគ្រប់ពេល) និងនៅជំហានទី 4 */}
+            {/* ប៊ូតុងខ្វែងបិទ [X] លេចឡើងតែនៅជំហានទី 1 និងនៅជំហានទី 4 */}
             {(payStep === 1 || payStep === 4) && (
               <button 
                 onClick={() => setShowPayModal(false)} 
@@ -763,7 +765,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ជំហានទី ៣៖ ជ្រើសរើសធនាគាររួមមាន ABA និង Acleda រួមទាំងបង្ហាញ QR Code */}
+            {/* ជំហានទី ៣៖ បង្ហាញប្រព័ន្ធបង្កើត Dynamic QR Code ការ៉េស្អាតស្វ័យប្រវត្តិតាមកូដ */}
             {payStep === 3 && selectedPlan && (
               <div>
                 <h3 className="text-base font-bold text-white mb-1">ស្កេនទូទាត់ប្រាក់ {selectedPlan.price}</h3>
@@ -771,37 +773,46 @@ export default function App() {
                   {calculateDatesText(selectedPlan.days)}
                 </p>
 
-                {/* ជម្រើស App ធនាគារ (ប្រសិនបើនៅលើទូរសព្ទអាចចុច Link ទៅ App បើមិនបានគឺស្កេន QR) */}
+                {/* ប៊ូតុងរើសធនាគារដើម្បីបង្កើត QR Code ជាក់លាក់ */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
-                  <a 
-                    href="https://i.postimg.cc/YSz6XsvY/photo-2026-06-23-23-42-06.jpg" // ជំនួសដោយ Link គណនី ABA Pay របស់អ្នក
-                    target="_blank"
-                    rel="noreferrer"
-                    className="bg-[#005A9C]/20 border border-[#005A9C]/40 hover:bg-[#005A9C]/30 p-2 rounded-xl text-center text-[11px] font-bold text-white transition-all block"
+                  <button 
+                    onClick={() => setActiveBank('aba')}
+                    className={`p-2 rounded-xl text-center text-[11px] font-bold transition-all block border ${
+                      activeBank === 'aba' 
+                        ? 'bg-[#005A9C] text-white border-white/20' 
+                        : 'bg-[#005A9C]/10 text-slate-300 border-transparent'
+                    }`}
                   >
-                    បើក App ABA
-                  </a>
-                  <a 
-                    href="https://i.postimg.cc/HnrTxnR4/photo-2026-06-24-00-38-54.jpg" // ជំនួសដោយ Link គណនី Acleda របស់អ្នក
-                    target="_blank"
-                    rel="noreferrer"
-                    className="bg-[#D4AF37]/20 border border-[#D4AF37]/40 hover:bg-[#D4AF37]/30 p-2 rounded-xl text-center text-[11px] font-bold text-white transition-all block"
+                    ធនាគារ ABA
+                  </button>
+                  <button 
+                    onClick={() => setActiveBank('acleda')}
+                    className={`p-2 rounded-xl text-center text-[11px] font-bold transition-all block border ${
+                      activeBank === 'acleda' 
+                        ? 'bg-[#D4AF37] text-black border-white/20' 
+                        : 'bg-[#D4AF37]/10 text-slate-300 border-transparent'
+                    }`}
                   >
-                    បើក App Acleda
-                  </a>
+                    ធនាគារ Acleda
+                  </button>
                 </div>
 
-                {/* កន្លែងបង្ហាញ QR Code សម្រាប់ឱ្យភ្ញៀវ Save ទុកស្កេន */}
-                <div className="bg-white p-3 rounded-2xl max-w-[180px] mx-auto mb-4 shadow-inner">
-                  <img 
-                    src="https://i.postimg.cc/NMW1J96X/photo-2026-06-24-00-14-01.jpg" // ជំនួសដោយរូបភាព QR KHQR រួម ឬ ABA/Acleda របស់អ្នក
-                    alt="Payment QR Code" 
-                    className="w-full h-auto rounded-lg mx-auto"
+                {/* ប្រអប់គូររូបភាព QR Code SVG រាងការ៉េស្អាតឥតខ្ចោះ មិនចេះខូចគែម */}
+                <div className="bg-white p-4 rounded-2xl w-[220px] h-[220px] mx-auto mb-3 shadow-md flex items-center justify-center">
+                  <QRCodeSVG 
+                    // លីងធនាគារនឹងបូកតម្លៃលុយបញ្ចូលគ្នាដោយស្វ័យប្រវត្តិតាមកញ្ចប់ដែលភ្ញៀវបានរើស
+                    value={activeBank === 'aba' 
+                      ? `https://link.ababank.com/your-aba-id?amount=${selectedPlan.price.replace('$', '')}`
+                      : `https://www.acledabank.com.kh/your-acleda-id?amount=${selectedPlan.price.replace('$', '')}`
+                    } 
+                    size={190}
+                    level="H"
+                    includeMargin={false}
                   />
                 </div>
 
                 <p className="text-[10px] text-slate-400 mb-4 leading-tight">
-                  សូមរក្សាទុក (Save) រូបភាព QR ខាងលើដើម្បីស្កេនបង់ប្រាក់ពីកម្មវិធីធនាគារណាមួយក៏បាន (KHQR)។
+                  សូមថតអេក្រង់ (Screenshot) ឬរក្សារូបភាព QR ខាងលើ ដើម្បីយកទៅស្កេនទូទាត់ប្រាក់នៅក្នុង App ធនាគាររបស់អ្នក។
                 </p>
 
                 <div className="flex gap-2">
@@ -842,7 +853,7 @@ export default function App() {
 
                 <div className="flex gap-2">
                   <button 
-                    onClick={() => setShowPaymentModal ? setShowPayModal(false) : setShowPayModal(false)} 
+                    onClick={() => setShowPayModal(false)} 
                     className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-400 py-2.5 rounded-xl font-bold text-xs transition-all"
                   >
                     មិនដាក់ទេ
