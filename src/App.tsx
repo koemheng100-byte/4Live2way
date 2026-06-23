@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 // បន្ថែម Premium Icons សម្រាប់មុខងារ Settings និង Key Visibility
-import { Mic, Monitor, Languages, ArrowLeftRight, Activity, Settings, Eye, EyeOff, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Mic, Monitor, Languages, ArrowLeftRight, Settings, Eye, EyeOff, Trash2, CheckCircle, XCircle } from 'lucide-react';
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -23,11 +23,14 @@ const pcmToBase64 = (pcm: Float32Array): string => {
 
 export default function App() {
   const [connected, setConnected] = useState(false);
-  const [restarting, setRestarting] = useState(false); // 1. Added restarting state
+  const [restarting, setRestarting] = useState(false); 
   const [sourceLang, setSourceLang] = useState('km');
   const [targetLang, setTargetLang] = useState('en');
   const [captureMode, setCaptureMode] = useState<'mic' | 'screen'>('mic');
   const [dubbingMode, setDubbingMode] = useState<'ducking' | 'replacement'>('ducking');
+
+  // --- បន្ថែម State សម្រាប់ចំណាំពេលអ្នកប្រើកំពុងចុច Focus លើ Select ភាសា ---
+  const [focusedSelect, setFocusedSelect] = useState<'source' | 'target' | null>(null);
 
   // --- API KEY & SETTINGS STATE ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -78,7 +81,6 @@ export default function App() {
     if (!apiKey.trim()) return;
     setTestStatus('testing');
     try {
-      // បង្កើតការភ្ជាប់បណ្តោះអាសន្នទៅកាន់ Server ដើម្បីតេស្ត Key
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const testWs = new WebSocket(`${wsProtocol}//${location.host}/live?source=km&target=en&apiKey=${encodeURIComponent(apiKey.trim())}`);
       
@@ -168,7 +170,6 @@ export default function App() {
   };
 
   const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode) => {
-    // ពិនិត្យមើលតម្លៃ apiKey ក្នុង State ជំនួសវិញដើម្បីភាពរហ័ស
     if (!apiKey.trim()) {
       setIsSettingsOpen(true);
       alert("សូមកំណត់ និងរក្សាទុក Gemini API Key របស់អ្នកជាមុនសិន!");
@@ -180,7 +181,6 @@ export default function App() {
       let audioStream: MediaStream;
 
       if (mode === 'screen') {
-        // បន្ថែមការការពារ៖ ពិនិត្យមើលថាតើអ្នកប្រើកំពុងបើកលើទូរស័ព្ទដៃ (Mobile) ឬអត់
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
           alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
@@ -216,7 +216,6 @@ export default function App() {
       mediaStreamRef.current = audioStream;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       
-      // បញ្ជូន API Key ចេញពី State ដោយផ្ទាល់ ជាមួយការការពារសុវត្ថិភាព String
       const ws = new WebSocket(
         `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&apiKey=${encodeURIComponent(apiKey.trim() || "")}`
       );
@@ -272,7 +271,6 @@ export default function App() {
         }
       };
 
-      // 3. Modified ws.onopen to turn off restarting indicator
       ws.onopen = () => {
         setConnected(true);
         setRestarting(false);
@@ -286,7 +284,6 @@ export default function App() {
     }
   };
 
-  // 2. Modified changeLanguages to set restarting state
   const changeLanguages = (newSource: string, newTarget: string) => {
     setSourceLang(newSource);
     setTargetLang(newTarget);
@@ -300,7 +297,6 @@ export default function App() {
   };
 
   const handleCaptureModeChange = (mode: 'mic' | 'screen') => {
-    // ពិនិត្យឧបករណ៍ជាមុនសិន មុននឹងប្តូរ State ទៅជា Screen លើ Mobile
     if (mode === 'screen') {
       const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
       if (isMobile) {
@@ -318,7 +314,6 @@ export default function App() {
     }
   };
 
-  // មុខងារជំនួយសម្រាប់បង្ហាញឈ្មោះភាសាជា ខ្មែរ (អង់គ្លេស) នៅក្នុង Label រវាង Source និង Target
   const getLanguageLabel = (code: string) => {
     const labels: Record<string, string> = {
       km: 'ខ្មែរ (Khmer)',
@@ -384,7 +379,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mode Controls & Settings Button */}
         <div className="flex items-center space-x-3">
           {captureMode === 'screen' && (
             <div className="flex bg-[#171A21] p-0.5 rounded-lg border border-white/5 text-[10px]">
@@ -420,7 +414,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* ⚙️ ប៊ូតុង Settings សម្រាប់បើកប្រអប់ API Key */}
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all"
@@ -436,14 +429,23 @@ export default function App() {
         
         {/* LANGUAGE SELECTOR */}
         <div className="w-full flex items-center justify-center space-x-2 bg-white/5 border border-white/10 backdrop-blur-xl rounded-full p-1 shadow-sm mb-4">
-          <div className="flex-1 relative flex justify-center">
+          
+          {/* SOURCE LANGUAGE SELECT */}
+          <div className={`flex-1 relative flex justify-center rounded-full transition-all duration-200 ${
+            focusedSelect === 'source' ? 'bg-white/10 ring-1 ring-[#4F7CFF]/50' : 'hover:bg-white/5'
+          }`}>
             <span className="text-xs font-semibold px-4 py-1.5 text-white text-center block truncate max-w-[140px]">
               {getLanguageLabel(sourceLang)}
             </span>
             <select
               className="absolute inset-0 opacity-0 w-full cursor-pointer bg-[#171A21] text-white"
               value={sourceLang}
-              onChange={(e) => changeLanguages(e.target.value, targetLang)}
+              onFocus={() => setFocusedSelect('source')}
+              onBlur={() => setFocusedSelect(null)}
+              onChange={(e) => {
+                changeLanguages(e.target.value, targetLang);
+                e.target.blur(); // ដក focus ចេញក្រោយពេលជ្រើសរើសរួច
+              }}
             >
               <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
               <option value="en" className="bg-[#171A21] text-white">អង់គ្លេស (English)</option>
@@ -473,14 +475,22 @@ export default function App() {
             <ArrowLeftRight size={12} />
           </div>
 
-          <div className="flex-1 relative flex justify-center">
+          {/* TARGET LANGUAGE SELECT */}
+          <div className={`flex-1 relative flex justify-center rounded-full transition-all duration-200 ${
+            focusedSelect === 'target' ? 'bg-white/10 ring-1 ring-[#4F7CFF]/50' : 'hover:bg-white/5'
+          }`}>
             <span className="text-xs font-semibold px-4 py-1.5 text-white text-center block truncate max-w-[140px]">
               {getLanguageLabel(targetLang)}
             </span>
             <select
               className="absolute inset-0 opacity-0 w-full cursor-pointer bg-[#171A21] text-white"
               value={targetLang}
-              onChange={(e) => changeLanguages(sourceLang, e.target.value)}
+              onFocus={() => setFocusedSelect('target')}
+              onBlur={() => setFocusedSelect(null)}
+              onChange={(e) => {
+                changeLanguages(sourceLang, e.target.value);
+                e.target.blur(); // ដក focus ចេញក្រោយពេលជ្រើសរើសរួច
+              }}
             >
               <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
               <option value="en" className="bg-[#171A21] text-white">អង់គ្លេស (English)</option>
@@ -510,7 +520,6 @@ export default function App() {
         {/* ROBOT HEAD UI SECTION */}
         <div className="flex flex-col items-center justify-center pt-2 pb-4">
           <div className="relative flex flex-col items-center">
-            
             <div className={`w-32 h-24 rounded-[40px] bg-gradient-to-b from-[#1E293B] to-[#0F172A] border-[3px] flex items-center justify-center p-4 shadow-2xl transition-all duration-300 relative
               ${connected 
                 ? 'border-[#4F7CFF] shadow-[0_0_30px_rgba(79,124,255,0.4)]' 
@@ -566,7 +575,6 @@ export default function App() {
 
         {/* LOWER CENTER: LIVE TRANSLATOR PREMIUM CIRCULAR ORB */}
         <div className="w-full flex justify-center items-center pt-4 pb-[130px] relative">
-          
           {connected && (
             <>
               <div className="absolute left-4 md:left-12 flex items-center gap-1 h-10">
@@ -635,7 +643,6 @@ export default function App() {
                 "
               >
                 <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-                
                 {restarting ? (
                   <>
                     <span className="text-[11px] text-cyan-100">Applying</span>
@@ -664,7 +671,6 @@ export default function App() {
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fadeIn p-4">
           <div className="bg-[#171A21] w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
-            
             <div className="p-5 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Settings size={16} className="text-[#4F7CFF]" />
@@ -681,7 +687,6 @@ export default function App() {
             <div className="p-5 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider text-[#A1A1AA] font-bold">Gemini API Key</label>
-                
                 <div className="relative flex items-center">
                   <input
                     type={showKey ? "text" : "password"}
@@ -744,7 +749,6 @@ export default function App() {
                 </button>
               )}
             </div>
-
           </div>
         </div>
       )}
