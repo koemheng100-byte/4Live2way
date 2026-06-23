@@ -1,7 +1,12 @@
 import "dotenv/config";
+
+console.log("CWD =", process.cwd());
+console.log("KEY =", process.env.GEMINI_API_KEY);
+console.log("ADMIN =", process.env.ADMIN_PASSWORD);
+
 import express from "express";
 import path from "path";
-import crypto from "crypto"; // បន្ថែមសម្រាប់បង្កើត randomUUID
+import crypto from "crypto"; 
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -10,26 +15,15 @@ import db from "./db";
 async function startServer() {
   const app = express();
   
-  // បន្ថែមសម្រាប់ទទួលយក JSON data ពី POST Request
   app.use(express.json());
 
   const PORT = Number(process.env.PORT) || 3000;
 
   console.log("Default Environment API KEY:", process.env.GEMINI_API_KEY ? "FOUND" : "MISSING");
 
-  if (process.env.NODE_ENV === "production") {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
-  } else {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  }
-
+  // ==========================================
   // --- ផ្នែកគ្រប់គ្រង ADMIN ROUTES ---
+  // ==========================================
 
   // ១. មើល User ទាំងអស់
   app.get("/admin/users", (req, res) => {
@@ -51,17 +45,17 @@ async function startServer() {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    const { token, plan, expire_at } = req.body;
+    const { userId, plan, expire_at } = req.body;
 
-    if (!token || !plan || !expire_at) {
+    if (!userId || !plan || !expire_at) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     try {
       db.prepare(`
-        INSERT INTO users (user_id, token, plan, expire_at, active)
-        VALUES (?, ?, ?, ?, 1)
-      `).run(crypto.randomUUID(), token, plan, expire_at);
+        INSERT INTO users (user_id, plan, expire_at, active)
+        VALUES (?, ?, ?, 1)
+      `).run(userId, plan, expire_at);
 
       res.json({ success: true });
     } catch (err) {
@@ -69,24 +63,24 @@ async function startServer() {
     }
   });
 
-  // ៣. បិទ User (Disable)
+  // ៣. បិទ User (Disable) - [កែប្រែរួច៖ ប្រើ userId ជំនួស token]
   app.post("/admin/disable-user", (req, res) => {
     if (req.body.password !== process.env.ADMIN_PASSWORD) {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    const { token } = req.body;
+    const { userId } = req.body;
 
-    if (!token) {
-      return res.status(400).json({ error: "Missing token" });
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
     }
 
     try {
       db.prepare(`
         UPDATE users
         SET active = 0
-        WHERE token = ?
-      `).run(token);
+        WHERE user_id = ?
+      `).run(userId);
 
       res.json({ success: true });
     } catch (err) {
@@ -94,7 +88,45 @@ async function startServer() {
     }
   });
 
+  // ៤. លុប User (Delete) - [កែប្រែរួច៖ ប្រើ userId ជំនួស token]
+  app.post("/admin/delete-user", (req, res) => {
+    if (req.body.password !== process.env.ADMIN_PASSWORD) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+
+    try {
+      db.prepare("DELETE FROM users WHERE user_id = ?").run(userId);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
   // --- បញ្ចប់ ADMIN ROUTES ---
+
+  // ==========================================
+  // --- ផ្នែក VITE & STATIC FILES MIDDLEWARES ---
+  // ==========================================
+
+  if (process.env.NODE_ENV === "production") {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
+  } else {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  }
+
+  // ------------------------------------------
 
   const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
@@ -107,43 +139,37 @@ async function startServer() {
     const source = url.searchParams.get("source") || "km";
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "unknown";
-    
-    // ចាប់យក token ពី URL (Phase 4)
-    const token = url.searchParams.get("token") || "";
 
-    console.log(`Client trying to connect: User=${userId}, Token=${token}`);
+    console.log(`Client trying to connect: User=${userId}`);
 
-    // --- ពិនិត្យមើល USER តាមរយៈ TOKEN ពី SQLITE (Phase 4) ---
+    // --- ពិនិត្យមើល USER តាមរយៈ USER_ID ពី SQLITE ---
     try {
-      const user = db.prepare("SELECT * FROM users WHERE token = ?").get(token) as {
+      // បានកែប្រែ៖ ដក token ចេញពី Type Definition ឱ្យត្រូវតាម Schema ថ្មី
+      const user = db.prepare("SELECT * FROM users WHERE user_id = ?").get(userId) as {
         user_id: string;
-        token: string;
         plan: string;
         expire_at: string;
         active: number;
       } | undefined;
 
-      // ករណីទី១: មិនមាន Token នេះនៅក្នុង Database ឡើយ (Invalid token)
       if (!user) {
-        console.warn(`Access Denied: Token [${token}] is invalid.`);
-        clientWs.send(JSON.stringify({ error: "Invalid token" }));
+        console.warn(`Access Denied: User ID [${userId}] is invalid.`);
+        clientWs.send(JSON.stringify({ error: "Invalid user ID" }));
         clientWs.close();
         return;
       }
 
-      // ករណីទី២: គណនីត្រូវបានផ្អាកដំណើរការ (Account suspended)
       if (user.active === 0) {
-        console.warn(`Access Denied: Account associated with token [${token}] is suspended.`);
+        console.warn(`Access Denied: Account associated with User ID [${userId}] is suspended.`);
         clientWs.send(JSON.stringify({ error: "Account suspended" }));
         clientWs.close();
         return;
       }
 
-      // ករណីទី៣: ហួសថ្ងៃកំណត់ប្រើប្រាស់ (Subscription expired)
       const expireDate = new Date(user.expire_at);
       const currentDate = new Date();
       if (expireDate < currentDate) {
-        console.warn(`Access Denied: Subscription expired for token [${token}] on ${user.expire_at}.`);
+        console.warn(`Access Denied: Subscription expired for User ID [${userId}] on ${user.expire_at}.`);
         clientWs.send(JSON.stringify({ error: "Subscription expired" }));
         clientWs.close();
         return;
@@ -155,9 +181,9 @@ async function startServer() {
       clientWs.close();
       return;
     }
-    // --- បញ្ចប់ការពិនិត្យមើល TOKEN ---
+    // --- បញ្ចប់ការពិនិត្យមើល USER_ID ---
 
-    console.log(`Client authenticated successfully via Token: User ID: ${userId}`);
+    console.log(`Client authenticated successfully: User ID: ${userId}`);
     
     const activeApiKey = process.env.GEMINI_API_KEY;
     if (!activeApiKey) {
