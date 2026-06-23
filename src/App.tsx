@@ -802,7 +802,7 @@ export default function App() {
                   <QRCodeSVG 
                     // លីងធនាគារនឹងបូកតម្លៃលុយបញ្ចូលគ្នាដោយស្វ័យប្រវត្តិតាមកញ្ចប់ដែលភ្ញៀវបានរើស
                     value={activeBank === 'aba' 
-                      ? `https://link.ababank.com/your-aba-id?amount=${selectedPlan.price.replace('$', '')}`
+                      ? `https://link.payway.com.kh/ABAPAYpI465740K`
                       : `https://www.acledabank.com.kh/your-acleda-id?amount=${selectedPlan.price.replace('$', '')}`
                     } 
                     size={190}
