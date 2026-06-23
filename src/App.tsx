@@ -774,7 +774,7 @@ export default function App() {
                 {/* ជម្រើស App ធនាគារ (ប្រសិនបើនៅលើទូរសព្ទអាចចុច Link ទៅ App បើមិនបានគឺស្កេន QR) */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <a 
-                    href="https://link.ababank.com/your-aba-pay-deep-link" // ជំនួសដោយ Link គណនី ABA Pay របស់អ្នក
+                    href="https://link.payway.com.kh/ABAPAYdz465732x" // ជំនួសដោយ Link គណនី ABA Pay របស់អ្នក
                     target="_blank"
                     rel="noreferrer"
                     className="bg-[#005A9C]/20 border border-[#005A9C]/40 hover:bg-[#005A9C]/30 p-2 rounded-xl text-center text-[11px] font-bold text-white transition-all block"
