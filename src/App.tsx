@@ -395,10 +395,10 @@ export default function App() {
       </header>
 
       {/* MAIN LAYOUT */}
-      <main className="flex-1 max-w-md w-full mx-auto flex flex-col p-5 overflow-hidden relative justify-between">
+      <main className="flex-1 max-w-md w-full mx-auto flex flex-col p-5 overflow-hidden relative justify-start">
         
         {/* LANGUAGE SELECTOR */}
-        <div className="w-full flex items-center justify-center space-x-2 bg-white/5 border border-white/10 backdrop-blur-xl rounded-full p-1 shadow-sm">
+        <div className="w-full flex items-center justify-center space-x-2 bg-white/5 border border-white/10 backdrop-blur-xl rounded-full p-1 shadow-sm mb-4">
           <div className="flex-1 relative flex justify-center">
             <span className="text-xs font-semibold px-4 py-1.5 text-white capitalize">
               {sourceLang === 'km' ? 'Khmer' : sourceLang === 'en' ? 'English' : sourceLang === 'zh' ? 'Chinese' : sourceLang === 'vi' ? 'Vietnamese' : sourceLang === 'ja' ? 'Japanese' : sourceLang === 'ko' ? 'Korean' : sourceLang === 'th' ? 'Thai' : sourceLang}
@@ -443,7 +443,7 @@ export default function App() {
         </div>
 
         {/* ROBOT HEAD UI SECTION (Dynamic Expression Styles) */}
-        <div className="flex flex-col items-center justify-center my-auto py-4">
+        <div className="flex flex-col items-center justify-center pt-2 pb-4">
           <div className="relative flex flex-col items-center">
             
             {/* Robot Chassis/Outer Ring */}
@@ -484,7 +484,7 @@ export default function App() {
             </div>
 
             {/* Sub-text guide prompt */}
-            <p className="text-[11px] text-center text-slate-400 max-w-[260px] leading-relaxed mt-4">
+            <p className="text-[11px] text-center text-slate-400 max-w-[260px] leading-relaxed mt-3">
               {connected 
                 ? "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ"
                 : "សូមចុចប៊ូតុង Live Translator ដើម្បីចាប់ផ្តើមបកប្រែ"
@@ -494,10 +494,10 @@ export default function App() {
         </div>
 
         {/* CONVERSATION BUBBLES CONTAINER */}
-        <div className="flex-1 w-full my-2 overflow-y-auto max-h-[160px] space-y-3 pr-1 scrollbar-none flex flex-col justify-end">
+        <div className="flex-1 w-full my-1 overflow-y-auto max-h-[100px] space-y-2 pr-1 scrollbar-none flex flex-col justify-end">
           {transcript.slice(-2).map((item, i) => (
             <div key={i} className="space-y-1 animate-fadeIn max-w-[90%] mx-auto w-full">
-              <div className="bg-[#111625] border border-white/5 rounded-xl p-3 shadow-sm text-center">
+              <div className="bg-[#111625] border border-white/5 rounded-xl p-2.5 shadow-sm text-center">
                 <p className="text-xs text-[#4F7CFF] font-semibold">{item.translated}</p>
               </div>
             </div>
@@ -505,7 +505,8 @@ export default function App() {
         </div>
 
         {/* LOWER CENTER: LIVE TRANSLATOR PREMIUM CIRCULAR ORB */}
-        <div className="w-full flex justify-center items-center pb-6 pt-2 relative">
+        {/* Adjusted placement to align the button precisely within 65%-70% of the viewport and leave over 120px safety padding at the bottom */}
+        <div className="w-full flex justify-center items-center pt-4 pb-[130px] relative">
           
           {/* Wave Sound Vector Bars (Left and Right) */}
           {connected && (
