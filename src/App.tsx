@@ -774,7 +774,7 @@ export default function App() {
                 {/* ជម្រើស App ធនាគារ (ប្រសិនបើនៅលើទូរសព្ទអាចចុច Link ទៅ App បើមិនបានគឺស្កេន QR) */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <a 
-                    href="https://link.payway.com.kh/ABAPAYFM465735B" // ជំនួសដោយ Link គណនី ABA Pay របស់អ្នក
+                    href="https://i.postimg.cc/YSz6XsvY/photo-2026-06-23-23-42-06.jpg" // ជំនួសដោយ Link គណនី ABA Pay របស់អ្នក
                     target="_blank"
                     rel="noreferrer"
                     className="bg-[#005A9C]/20 border border-[#005A9C]/40 hover:bg-[#005A9C]/30 p-2 rounded-xl text-center text-[11px] font-bold text-white transition-all block"
@@ -782,7 +782,7 @@ export default function App() {
                     បើក App ABA
                   </a>
                   <a 
-                    href="https://www.acledabank.com.kh/your-acleda-link" // ជំនួសដោយ Link គណនី Acleda របស់អ្នក
+                    href="https://i.postimg.cc/HnrTxnR4/photo-2026-06-24-00-38-54.jpg" // ជំនួសដោយ Link គណនី Acleda របស់អ្នក
                     target="_blank"
                     rel="noreferrer"
                     className="bg-[#D4AF37]/20 border border-[#D4AF37]/40 hover:bg-[#D4AF37]/30 p-2 rounded-xl text-center text-[11px] font-bold text-white transition-all block"
