@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useEffect, useRef, useState } from 'react';
-import { Mic, Monitor, Languages, ArrowLeftRight } from 'lucide-react';
+import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -46,12 +46,78 @@ export default function App() {
   const screenGainNodeRef = useRef<GainNode | null>(null);
   const duckTimeoutRef = useRef<number | null>(null);
 
+  // --- STATE បន្ថែមថ្មី សម្រាប់ប្រព័ន្ធគ្រប់គ្រងការបង់ប្រាក់ និង NO-AUTH ID ---
+  const [userId, setUserId] = useState<string>("");
+  const [isPaid, setIsPaid] = useState<boolean>(true); // សន្មតថាតាមដានស្ថានភាពជាមុនសិន
+  const [showPayModal, setShowPayModal] = useState<boolean>(false);
+  const [payStep, setPayStep] = useState<number>(1); // 1: បង្ហាញ ID, 2: ជ្រើសរើសរយៈពេល, 3: ជ្រើសរើសធនាគារ/QR, 4: ដាក់លេខទូរសព្ទ
+  const [selectedPlan, setSelectedPlan] = useState<{ name: string; price: string; days: number } | null>(null);
+  const [copied, setCopied] = useState<boolean>(false);
+  const [inputPhone, setInputPhone] = useState<string>("");
+  const [expiryText, setExpiryText] = useState<string>("");
+
+  // ១. បង្កើត ID ម៉ាស៊ីន និងឆែកស្ថានភាពបង់ប្រាក់ពេលបើកកម្មវិធីភ្លាម
   useEffect(() => {
+    let localId = localStorage.getItem("user_machine_id");
+    if (!localId) {
+      // បង្កើត ID គំរូថ្មីមួយដោយស្វ័យប្រវត្តិ (ឧទាហរណ៍៖ L2W-XXXXXX)
+      localId = "L2W-" + Math.floor(100000 + Math.random() * 900000);
+      localStorage.setItem("user_machine_id", localId);
+    }
+    setUserId(localId);
+    checkSubscriptionStatus(localId);
+
     return () => {
       if (subtitleTimeoutRef.current) clearTimeout(subtitleTimeoutRef.current);
       if (duckTimeoutRef.current) clearTimeout(duckTimeoutRef.current);
     };
   }, []);
+
+  const checkSubscriptionStatus = async (id: string) => {
+    try {
+      const res = await fetch(`/api/check-status/${id}`);
+      const data = await res.json();
+      setIsPaid(data.active);
+      if (data.active && data.expiredAt) {
+        const date = new Date(data.expiredAt);
+        setExpiryText(`ផុតកំណត់៖ ${date.toLocaleDateString()} ${date.toLocaleTimeString()}`);
+      } else {
+        setExpiryText("មិនទាន់បានបង់ប្រាក់ ឬអស់សុពលភាព");
+      }
+    } catch (e) {
+      console.error("Error checking subscription status:", e);
+    }
+  };
+
+  const copyIdToClipboard = () => {
+    navigator.clipboard.writeText(userId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSavePhone = async () => {
+    if (inputPhone.trim()) {
+      try {
+        await fetch("/api/save-phone", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, phoneNumber: inputPhone })
+        });
+      } catch (e) {
+        console.error("Error saving phone:", e);
+      }
+    }
+    setShowPayModal(false);
+    checkSubscriptionStatus(userId);
+  };
+
+  const calculateDatesText = (days: number) => {
+    const start = new Date();
+    const end = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    return `បង់ពីថ្ងៃនេះ៖ ${start.toLocaleDateString()} -> ផុតកំណត់៖ ${end.toLocaleDateString()}`;
+  };
+
+  // -------------------------------------------------------------
 
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
     const binary = atob(base64Audio);
@@ -126,6 +192,13 @@ export default function App() {
   };
 
   const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode) => {
+    // បន្ថែមលក្ខខណ្ឌ៖ បើមិនទាន់បង់ប្រាក់ មិនអនុញ្ញាតឱ្យបើកប្រព័ន្ធបកប្រែឡើយ ហើយបង្ហាញផ្ទាំងបង់ប្រាក់ភ្លាម
+    if (!isPaid) {
+      setPayStep(1);
+      setShowPayModal(true);
+      return;
+    }
+
     try {
       let stream: MediaStream;
       let audioStream: MediaStream;
@@ -166,9 +239,9 @@ export default function App() {
       mediaStreamRef.current = audioStream;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       
-      // ផ្ញើតែ source និង target ទៅកាន់ server (មិនមានផ្ញើ apiKey ឡើយ)
+      // ផ្ញើ userId ទៅកាន់ server តាមរយៈ URL Parameter ដើម្បីផ្ទៀងផ្ទាត់ និងទាញយក API Key
       const ws = new WebSocket(
-        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}`
+        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&userId=${userId}`
       );
       wsRef.current = ws;
 
@@ -272,27 +345,11 @@ export default function App() {
 
   const getLanguageLabel = (code: string) => {
     const labels: Record<string, string> = {
-      km: 'ខ្មែរ (Khmer)',
-      en: 'អង់គ្លេស (English)',
-      zh: 'ចិន (Chinese)',
-      'zh-HK': 'ចិនកាតាំង (Cantonese)',
-      vi: 'វៀតណាម (Vietnamese)',
-      ja: 'ជប៉ុន (Japanese)',
-      ko: 'កូរ៉េ (Korean)',
-      th: 'ថៃ (Thai)',
-      id: 'ឥណ្ឌូនេស៊ី (Indonesian)',
-      ms: 'ម៉ាឡេស៊ី (Malay)',
-      lo: 'ឡាវ (Lao)',
-      fr: 'បារាំង (French)',
-      de: 'អាល្លឺម៉ង់ (German)',
-      no: 'ន័រវែស (Norwegian)',
-      hi: 'ហិណ្ឌី (Hindi)',
-      fil: 'ហ្វីលីពិន (Filipino)',
-      mn: 'ម៉ុងហ្គោលី (Mongolian)',
-      it: 'អ៊ីតាលី (Italian)',
-      he: 'ហេប្រឺ (Hebrew)',
-      ru: 'រុស្ស៊ី (Russian)',
-      my: 'ភូមា (Burmese)'
+      km: 'ខ្មែរ (Khmer)', en: 'អង់គ្លេស (English)', zh: 'ចិន (Chinese)', 'zh-HK': 'ចិនកាតាំង (Cantonese)',
+      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរ៉េ (Korean)', th: 'ថៃ (Thai)',
+      id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡេស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
+      de: 'អាល្លឺម៉ង់ (German)', no: 'ន័រវែស (Norwegian)', hi: 'ហិណ្ឌី (Hindi)', fil: 'ហ្វីលីពិន (Filipino)',
+      mn: 'ម៉ុងហ្គោលី (Mongolian)', it: 'អ៊ីតាលី (Italian)', he: 'ហេប្រឺ (Hebrew)', ru: 'រុស្ស៊ី (Russian)', my: 'ភូមា (Burmese)'
     };
     return labels[code] || code;
   };
@@ -326,12 +383,20 @@ export default function App() {
       {/* HEADER */}
       <header className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#111625]/60 backdrop-blur-xl z-10">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-[#4F7CFF] rounded-lg flex items-center justify-center border border-white/10 shadow-sm">
+          <div 
+            onClick={() => { setPayStep(1); setShowPayModal(true); }}
+            className="w-8 h-8 bg-[#4F7CFF] rounded-lg flex items-center justify-center border border-white/10 shadow-sm cursor-pointer hover:bg-opacity-80 transition-all"
+          >
             <span className="text-white font-bold text-sm">ខ</span>
           </div>
-          <div>
-            <h1 className="text-sm font-semibold tracking-tight text-white">Live-Translate</h1>
-            <p className="text-[8px] uppercase tracking-[0.2em] text-[#A1A1AA]">2-Way Interpreter</p>
+          <div className="cursor-pointer" onClick={() => { setPayStep(1); setShowPayModal(true); }}>
+            <h1 className="text-sm font-semibold tracking-tight text-white flex items-center gap-1.5">
+              Live-Translate 
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${isPaid ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                {isPaid ? "Premium" : "បង់ប្រាក់"}
+              </span>
+            </h1>
+            <p className="text-[8px] uppercase tracking-[0.2em] text-[#A1A1AA] truncate max-w-[150px] font-mono">{userId || "Loading ID..."}</p>
           </div>
         </div>
 
@@ -612,6 +677,187 @@ export default function App() {
       {liveSubtitle && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-black/70 border border-white/10 backdrop-blur-xl text-white text-base font-semibold text-center max-w-[85%] shadow-2xl pointer-events-none animate-fadeIn">
           {liveSubtitle}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ផ្ទាំង PREMIUM POPUP MODAL (លេចឡើងដោយមិនប៉ះពាល់ដល់ UI ចាស់ សម្រាប់បង់ប្រាក់) */}
+      {/* ========================================================================= */}
+      {showPayModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#111625] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center relative shadow-2xl">
+            
+            {/* ប៊ូតុងខ្វែងបិទ [X] លេចឡើងតែនៅជំហានទី 1 (ឬបើចង់ឱ្យបិទបានគ្រប់ពេល) និងនៅជំហានទី 4 */}
+            {(payStep === 1 || payStep === 4) && (
+              <button 
+                onClick={() => setShowPayModal(false)} 
+                className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors p-1 text-sm font-bold"
+              >
+                ✕
+              </button>
+            )}
+
+            {/* ជំហានទី ១៖ បង្ហាញ ID និងស្ថានភាពរួមទាំងប៊ូតុងបង់ប្រាក់ */}
+            {payStep === 1 && (
+              <div>
+                <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3 border border-[#4F7CFF]/30">
+                  <Languages size={22} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1">គណនីប្រើប្រាស់ប្រព័ន្ធ</h3>
+                <p className="text-[11px] text-slate-400 mb-4 font-mono">{expiryText}</p>
+
+                <div className="bg-white/[0.03] border border-white/5 p-3 rounded-2xl mb-4 flex justify-between items-center text-left">
+                  <div>
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500 block">ID ម៉ាស៊ីនរបស់អ្នក</span>
+                    <span className="text-xs text-slate-300 font-mono font-bold">{userId}</span>
+                  </div>
+                  <button 
+                    onClick={copyIdToClipboard}
+                    className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-[#4F7CFF] transition-all flex items-center gap-1 text-[11px]"
+                  >
+                    {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => setPayStep(2)} 
+                  className="w-full bg-[#4F7CFF] hover:bg-[#3b66e0] py-3 rounded-2xl font-bold text-sm text-white shadow-lg transition-all"
+                >
+                  បង់ប្រាក់ដើម្បីប្រើប្រាស់
+                </button>
+              </div>
+            )}
+
+            {/* ជំហានទី ២៖ ជ្រើសរើសរយៈពេលប្រើប្រាស់ */}
+            {payStep === 2 && (
+              <div>
+                <h3 className="text-base font-bold text-white mb-1">ជ្រើសរើសរយៈពេលប្រើប្រាស់</h3>
+                <p className="text-xs text-slate-400 mb-4">ជ្រើសរើសកញ្ចប់ណាមួយដើម្បីបន្តទៅកាន់ការទូទាត់</p>
+                
+                <div className="space-y-2 mb-4">
+                  <button 
+                    onClick={() => { setSelectedPlan({ name: "1 ថ្ងៃ", price: "0.50$", days: 1 }); setPayStep(3); }}
+                    className="w-full bg-white/[0.03] hover:bg-white/5 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center text-sm font-semibold text-slate-200 transition-all"
+                  >
+                    <span>កញ្ចប់សាកល្បង (1 ថ្ងៃ)</span>
+                    <span className="text-[#4F7CFF]">0.50$</span>
+                  </button>
+                  <button 
+                    onClick={() => { setSelectedPlan({ name: "1 សប្ដាហ៍", price: "1.00$", days: 7 }); setPayStep(3); }}
+                    className="w-full bg-white/[0.03] hover:bg-white/5 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center text-sm font-semibold text-slate-200 transition-all"
+                  >
+                    <span>កញ្ចប់ប្រចាំសប្ដាហ៍ (1 សប្ដាហ៍)</span>
+                    <span className="text-[#4F7CFF]">1.00$</span>
+                  </button>
+                  <button 
+                    onClick={() => { setSelectedPlan({ name: "1 ខែ", price: "3.00$", days: 30 }); setPayStep(3); }}
+                    className="w-full bg-white/[0.03] hover:bg-white/5 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center text-sm font-semibold text-slate-200 transition-all"
+                  >
+                    <span>កញ្ចប់ពេញនិយម (1 ខែ)</span>
+                    <span className="text-[#4F7CFF]">3.00$</span>
+                  </button>
+                </div>
+
+                <button onClick={() => setPayStep(1)} className="text-xs text-slate-400 hover:text-white transition-colors underline">ត្រឡប់ក្រោយ</button>
+              </div>
+            )}
+
+            {/* ជំហានទី ៣៖ ជ្រើសរើសធនាគាររួមមាន ABA និង Acleda រួមទាំងបង្ហាញ QR Code */}
+            {payStep === 3 && selectedPlan && (
+              <div>
+                <h3 className="text-base font-bold text-white mb-1">ស្កេនទូទាត់ប្រាក់ {selectedPlan.price}</h3>
+                <p className="text-[10px] text-emerald-400 font-medium mb-3 bg-emerald-500/10 py-1 px-2 rounded-lg inline-block">
+                  {calculateDatesText(selectedPlan.days)}
+                </p>
+
+                {/* ជម្រើស App ធនាគារ (ប្រសិនបើនៅលើទូរសព្ទអាចចុច Link ទៅ App បើមិនបានគឺស្កេន QR) */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <a 
+                    href="https://link.ababank.com/your-aba-pay-deep-link" // ជំនួសដោយ Link គណនី ABA Pay របស់អ្នក
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-[#005A9C]/20 border border-[#005A9C]/40 hover:bg-[#005A9C]/30 p-2 rounded-xl text-center text-[11px] font-bold text-white transition-all block"
+                  >
+                    បើក App ABA
+                  </a>
+                  <a 
+                    href="https://www.acledabank.com.kh/your-acleda-link" // ជំនួសដោយ Link គណនី Acleda របស់អ្នក
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-[#D4AF37]/20 border border-[#D4AF37]/40 hover:bg-[#D4AF37]/30 p-2 rounded-xl text-center text-[11px] font-bold text-white transition-all block"
+                  >
+                    បើក App Acleda
+                  </a>
+                </div>
+
+                {/* កន្លែងបង្ហាញ QR Code សម្រាប់ឱ្យភ្ញៀវ Save ទុកស្កេន */}
+                <div className="bg-white p-3 rounded-2xl max-w-[180px] mx-auto mb-4 shadow-inner">
+                  <img 
+                    src="https://i.postimg.cc/NMW1J96X/photo-2026-06-24-00-14-01.jpg" // ជំនួសដោយរូបភាព QR KHQR រួម ឬ ABA/Acleda របស់អ្នក
+                    alt="Payment QR Code" 
+                    className="w-full h-auto rounded-lg mx-auto"
+                  />
+                </div>
+
+                <p className="text-[10px] text-slate-400 mb-4 leading-tight">
+                  សូមរក្សាទុក (Save) រូបភាព QR ខាងលើដើម្បីស្កេនបង់ប្រាក់ពីកម្មវិធីធនាគារណាមួយក៏បាន (KHQR)។
+                </p>
+
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setPayStep(2)} 
+                    className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-300 py-2.5 rounded-xl font-bold text-xs transition-all"
+                  >
+                    ប្តូរកញ្ចប់
+                  </button>
+                  <button 
+                    onClick={() => setPayStep(4)} 
+                    className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
+                  >
+                    ខ្ញុំបានបង់ប្រាក់រួចហើយ
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ជំហានទី ៤៖ ផ្ទាំង Pop up បន្ថែមស្រេចចិត្ត ឱ្យវាយលេខទូរសព្ទភ្ជាប់ជាមួយ ID */}
+            {payStep === 4 && (
+              <div>
+                <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Phone size={20} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រេចចិត្ត)</h3>
+                <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                  ងាយស្រួលសម្រាប់ការផ្ទៀងផ្ទាត់ និងជួយសម្រួលពេលមានបញ្ហា។ អ្នកអាចខ្វែងចោល [✕] ក៏បាន។
+                </p>
+
+                <input 
+                  type="tel" 
+                  placeholder="បញ្ចូលលេខទូរស័ព្ទរបស់អ្នក" 
+                  className="w-full bg-white/[0.03] border border-white/10 p-3 rounded-2xl mb-4 text-center text-sm font-semibold focus:outline-none focus:border-[#4F7CFF] transition-all text-white placeholder-slate-500"
+                  value={inputPhone}
+                  onChange={(e) => setInputPhone(e.target.value)}
+                />
+
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setShowPaymentModal ? setShowPayModal(false) : setShowPayModal(false)} 
+                    className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-400 py-2.5 rounded-xl font-bold text-xs transition-all"
+                  >
+                    មិនដាក់ទេ
+                  </button>
+                  <button 
+                    onClick={handleSavePhone} 
+                    className="w-2/3 bg-[#4F7CFF] hover:bg-[#3b66e0] text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
+                  >
+                    រក្សាទុក (Save)
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
       )}
 
