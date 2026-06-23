@@ -310,38 +310,33 @@ export default function App() {
   };
 
   return (
-    <div className="w-full h-screen bg-[#0F1115] text-[#FFFFFF] font-['Inter','Noto_Sans_Khmer',sans-serif] flex flex-col overflow-hidden relative antialiased">
+    <div className="w-full h-screen bg-[#060913] text-[#FFFFFF] font-['Inter','Noto_Sans_Khmer',sans-serif] flex flex-col overflow-hidden relative antialiased">
       
-      {/* INJECT CUSTOM CSS ANIMATIONS FOR THE PREMIUM AI ORB */}
+      {/* CSS For Premium Animations and Neon Effects */}
       <style>{`
-        @keyframes orb-breathe {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 25px rgba(79, 124, 255, 0.4); }
-          50% { transform: scale(1.03); box-shadow: 0 0 45px rgba(79, 124, 255, 0.7); }
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 25px rgba(30, 80, 255, 0.4), inset 0 0 15px rgba(255,255,255,0.1); }
+          50% { transform: scale(1.03); box-shadow: 0 0 45px rgba(30, 80, 255, 0.8), inset 0 0 25px rgba(30, 80, 255, 0.3); }
         }
-        @keyframes orb-float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-6px); }
-        }
-        @keyframes robot-blink {
+        @keyframes blink {
           0%, 90%, 100% { transform: scaleY(1); }
           95% { transform: scaleY(0.1); }
         }
-        @keyframes sound-wave-bar {
-          0%, 100% { height: 6px; }
-          50% { height: 20px; }
+        @keyframes wave-height {
+          0%, 100% { height: 6px; opacity: 0.4; }
+          50% { height: 28px; opacity: 1; }
         }
-        .animate-orb-breathe { animation: orb-breathe 4s ease-in-out infinite; }
-        .animate-orb-float { animation: orb-float 3s ease-in-out infinite; }
-        .animate-robot-blink { animation: robot-blink 1.5s ease-in-out infinite; }
-        .animate-wave-1 { animation: sound-wave-bar 0.6s ease-in-out infinite alternate; }
-        .animate-wave-2 { animation: sound-wave-bar 0.4s ease-in-out infinite alternate 0.1s; }
-        .animate-wave-3 { animation: sound-wave-bar 0.7s ease-in-out infinite alternate 0.2s; }
-        .animate-wave-4 { animation: sound-wave-bar 0.5s ease-in-out infinite alternate 0.15s; }
-        .animate-wave-5 { animation: sound-wave-bar 0.6s ease-in-out infinite alternate 0.3s; }
+        .animate-breathe { animation: breathe 3.5s ease-in-out infinite; }
+        .animate-blink { animation: blink 1.5s ease-in-out infinite; }
+        .animate-wave-bar-1 { animation: wave-height 0.5s ease-in-out infinite alternate; }
+        .animate-wave-bar-2 { animation: wave-height 0.35s ease-in-out infinite alternate 0.1s; }
+        .animate-wave-bar-3 { animation: wave-height 0.6s ease-in-out infinite alternate 0.2s; }
+        .animate-wave-bar-4 { animation: wave-height 0.45s ease-in-out infinite alternate 0.15s; }
+        .animate-wave-bar-5 { animation: wave-height 0.55s ease-in-out infinite alternate 0.3s; }
       `}</style>
 
       {/* HEADER */}
-      <header className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#171A21]/40 backdrop-blur-xl z-10">
+      <header className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#111625]/60 backdrop-blur-xl z-10">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-[#4F7CFF] rounded-lg flex items-center justify-center border border-white/10 shadow-sm">
             <span className="text-white font-bold text-sm">ខ</span>
@@ -400,7 +395,7 @@ export default function App() {
       </header>
 
       {/* MAIN LAYOUT */}
-      <main className="flex-1 max-w-md w-full mx-auto flex flex-col p-5 overflow-hidden relative">
+      <main className="flex-1 max-w-md w-full mx-auto flex flex-col p-5 overflow-hidden relative justify-between">
         
         {/* LANGUAGE SELECTOR */}
         <div className="w-full flex items-center justify-center space-x-2 bg-white/5 border border-white/10 backdrop-blur-xl rounded-full p-1 shadow-sm">
@@ -447,114 +442,148 @@ export default function App() {
           </div>
         </div>
 
-        {/* LIVE STATUS INDICATOR */}
-        <div className="my-2 flex justify-center">
-          <div className="inline-flex items-center space-x-1.5 bg-[#171A21] border border-white/5 px-3 py-1 rounded-full">
-            <Activity size={10} className={connected ? "text-emerald-400 animate-pulse" : "text-[#A1A1AA]"} />
-            <span className="text-[10px] font-medium tracking-wide text-[#A1A1AA]">
-              {connected ? "System Active" : "System Paused"}
-            </span>
+        {/* ROBOT HEAD UI SECTION (Dynamic Expression Styles) */}
+        <div className="flex flex-col items-center justify-center my-auto py-4">
+          <div className="relative flex flex-col items-center">
+            
+            {/* Robot Chassis/Outer Ring */}
+            <div className={`w-32 h-24 rounded-[40px] bg-gradient-to-b from-[#1E293B] to-[#0F172A] border-[3px] flex items-center justify-center p-4 shadow-2xl transition-all duration-300 relative
+              ${connected 
+                ? 'border-[#4F7CFF] shadow-[0_0_30px_rgba(79,124,255,0.4)]' 
+                : 'border-[#334155] shadow-black'
+              }`}
+            >
+              {/* Antenna */}
+              <div className="absolute -top-4 w-1 h-4 bg-slate-500 left-1/2 -translate-x-1/2">
+                <div className={`absolute -top-2 w-3 h-3 rounded-full left-1/2 -translate-x-1/2 shadow-lg transition-colors duration-300
+                  ${connected ? 'bg-[#4F7CFF] shadow-[0_0_10px_#4F7CFF]' : 'bg-slate-400'}`} 
+                />
+              </div>
+
+              {/* Ears */}
+              <div className="absolute -left-2.5 w-2 h-8 bg-slate-600 rounded-l-md top-1/2 -translate-y-1/2" />
+              <div className="absolute -right-2.5 w-2 h-8 bg-slate-600 rounded-r-md top-1/2 -translate-y-1/2" />
+
+              {/* Black Visor Screen */}
+              <div className="w-full h-full bg-[#090D1A] rounded-[24px] border border-white/5 flex items-center justify-center gap-6 px-4">
+                {/* Left Eye */}
+                <div className={`w-5 h-5 rounded-full transition-all duration-300
+                  ${connected 
+                    ? 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
+                    : 'bg-[#2E5BFF] shadow-[0_0_10px_rgba(46,91,255,0.6)]'
+                  }`} 
+                />
+                {/* Right Eye */}
+                <div className={`w-5 h-5 rounded-full transition-all duration-300
+                  ${connected 
+                    ? 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
+                    : 'bg-[#2E5BFF] shadow-[0_0_10px_rgba(46,91,255,0.6)]'
+                  }`} 
+                />
+              </div>
+            </div>
+
+            {/* Sub-text guide prompt */}
+            <p className="text-[11px] text-center text-slate-400 max-w-[260px] leading-relaxed mt-4">
+              {connected 
+                ? "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ"
+                : "សូមចុចប៊ូតុង Live Translator ដើម្បីចាប់ផ្តើមបកប្រែ"
+              }
+            </p>
           </div>
         </div>
 
         {/* CONVERSATION BUBBLES CONTAINER */}
-        <div className="flex-1 w-full my-4 overflow-y-auto pb-8 space-y-4 pr-1 scrollbar-none flex flex-col justify-end">
-          {transcript.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-center p-6">
-              <p className="text-xs text-[#A1A1AA] max-w-[240px] leading-relaxed">
-                រាល់ឃ្លាដែលបាននិយាយ និងបកប្រែរួច នឹងបង្ហាញជាទម្រង់ប្រអប់សារសន្ទនានៅទីនេះ។
-              </p>
-            </div>
-          ) : (
-            transcript.map((item, i) => (
-              <div key={i} className="space-y-2 animate-fadeIn max-w-[85%] last:mb-2">
-                <div className="bg-[#171A21] border border-white/10 rounded-2xl p-3.5 shadow-sm space-y-1">
-                  <span className="text-[9px] uppercase tracking-wider text-[#A1A1AA] font-bold block">
-                    {sourceLang === 'km' ? 'Original' : 'Source'}
-                  </span>
-                  <p className="text-xs text-[#A1A1AA] italic">{item.original || "..."}</p>
-                  <div className="border-t border-white/5 my-1.5"></div>
-                  <span className="text-[9px] uppercase tracking-wider text-[#4F7CFF] font-bold block">
-                    Translated
-                  </span>
-                  <p className="text-sm text-white font-medium leading-relaxed">{item.translated}</p>
-                </div>
+        <div className="flex-1 w-full my-2 overflow-y-auto max-h-[160px] space-y-3 pr-1 scrollbar-none flex flex-col justify-end">
+          {transcript.slice(-2).map((item, i) => (
+            <div key={i} className="space-y-1 animate-fadeIn max-w-[90%] mx-auto w-full">
+              <div className="bg-[#111625] border border-white/5 rounded-xl p-3 shadow-sm text-center">
+                <p className="text-xs text-[#4F7CFF] font-semibold">{item.translated}</p>
               </div>
-            ))
-          )}
+            </div>
+          ))}
         </div>
 
-        {/* REDESIGNED PREMIUM AI ORB CONTROL BUTTONS */}
-        <div className="w-full flex justify-center z-10 pt-2 pb-10 items-center min-h-[220px]">
-          {connected ? (
-            <div className="relative flex items-center justify-center animate-orb-float">
-              {/* Continuous Outer Pulse Ring */}
-              <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" style={{ animationDuration: '2s' }} />
-              
-              {/* Sound Wave Animation Elements */}
-              <div className="absolute -left-12 flex items-center gap-1 h-8">
-                <div className="w-1 bg-red-400 rounded-full animate-wave-1" />
-                <div className="w-1 bg-red-500 rounded-full animate-wave-2" />
-                <div className="w-1 bg-red-400 rounded-full animate-wave-3" />
+        {/* LOWER CENTER: LIVE TRANSLATOR PREMIUM CIRCULAR ORB */}
+        <div className="w-full flex justify-center items-center pb-6 pt-2 relative">
+          
+          {/* Wave Sound Vector Bars (Left and Right) */}
+          {connected && (
+            <>
+              <div className="absolute left-4 md:left-12 flex items-center gap-1 h-10">
+                <div className="w-[3px] bg-cyan-400 rounded-full animate-wave-bar-1" />
+                <div className="w-[3px] bg-[#4F7CFF] rounded-full animate-wave-bar-2" />
+                <div className="w-[3px] bg-blue-500 rounded-full animate-wave-bar-3" />
+                <div className="w-[3px] bg-indigo-400 rounded-full animate-wave-bar-4" />
               </div>
-              <div className="absolute -right-12 flex items-center gap-1 h-8">
-                <div className="w-1 bg-red-400 rounded-full animate-wave-3" />
-                <div className="w-1 bg-red-500 rounded-full animate-wave-4" />
-                <div className="w-1 bg-red-400 rounded-full animate-wave-5" />
+              <div className="absolute right-4 md:right-12 flex items-center gap-1 h-10">
+                <div className="w-[3px] bg-indigo-400 rounded-full animate-wave-bar-4" />
+                <div className="w-[3px] bg-blue-500 rounded-full animate-wave-bar-3" />
+                <div className="w-[3px] bg-[#4F7CFF] rounded-full animate-wave-bar-2" />
+                <div className="w-[3px] bg-cyan-400 rounded-full animate-wave-bar-1" />
               </div>
+            </>
+          )}
 
-              {/* Stop State Premium AI Orb */}
+          {connected ? (
+            /* ACTIVE / STOP STATE ORB */
+            <div className="relative flex items-center justify-center">
+              {/* Outer pulsing neon ring overlay */}
+              <div className="absolute -inset-2 rounded-full border border-red-500/40 animate-ping opacity-75" style={{ animationDuration: '1.8s' }} />
+              <div className="absolute -inset-4 rounded-full border border-red-600/20 animate-ping opacity-40" style={{ animationDuration: '2.5s' }} />
+
               <button 
                 onClick={stopTranslation}
                 className="
                   w-[140px] h-[140px] md:w-[180px] md:h-[180px]
                   rounded-full
-                  bg-gradient-to-br from-red-500 via-red-600 to-rose-800
+                  bg-gradient-to-b from-[#EF4444] via-[#DC2626] to-[#991B1B]
                   text-white
-                  shadow-[0_0_35px_rgba(239,68,68,0.6)]
-                  border-2 border-red-400/30
+                  shadow-[0_0_40px_rgba(239,68,68,0.7),inset_0_4px_12px_rgba(255,255,255,0.3)]
+                  border-2 border-red-400/50
                   transition-all duration-300
                   hover:scale-105 active:scale-95
-                  flex flex-col items-center justify-center p-4 select-none
+                  flex flex-col items-center justify-center select-none p-2
                 "
               >
-                {/* Robot Eyes with Blinking System */}
-                <div className="flex gap-4 mb-2 justify-center items-center h-4">
-                  <div className="w-3 h-3 md:w-4 md:h-4 bg-white rounded-full shadow-[0_0_10px_#fff] animate-robot-blink" />
-                  <div className="w-3 h-3 md:w-4 md:h-4 bg-white rounded-full shadow-[0_0_10px_#fff] animate-robot-blink" />
-                </div>
-
-                <span className="text-[11px] md:text-xs uppercase tracking-[0.2em] font-light text-red-100 opacity-90">Stop</span>
-                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-md">Translator</span>
+                {/* Translation Icon */}
+                <Languages size={24} className="mb-1 text-red-100 md:w-7 md:h-7 drop-shadow-md" />
+                
+                {/* Text Typography */}
+                <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-red-100/90 leading-tight">Stop</span>
+                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
               </button>
             </div>
           ) : (
-            /* Idle State Premium AI Orb */
-            <button 
-              onClick={() => startTranslation(sourceLang, targetLang, captureMode)}
-              className="
-                w-[140px] h-[140px] md:w-[180px] md:h-[180px]
-                rounded-full
-                bg-gradient-to-br from-[#4F7CFF] via-[#2E5BFF] to-[#1A3BB5]
-                text-white
-                border-2 border-blue-400/20
-                transition-all duration-300
-                hover:scale-105 active:scale-95
-                flex flex-col items-center justify-center p-4 select-none
-                animate-orb-breathe
-              "
-            >
-              <Languages size={26} className="mb-2 text-blue-100 drop-shadow-[0_0_6px_rgba(255,255,255,0.6)] md:w-8 md:h-8" />
-              
-              {/* Normal Standing Robot Eyes */}
-              <div className="flex gap-3 mb-2 justify-center items-center">
-                <div className="w-2.5 h-2.5 bg-cyan-300 rounded-full shadow-[0_0_8px_#22d3ee]" />
-                <div className="w-2.5 h-2.5 bg-cyan-300 rounded-full shadow-[0_0_8px_#22d3ee]" />
-              </div>
+            /* IDLE STATE PREMIUM BLUE ORB */
+            <div className="relative flex items-center justify-center">
+              {/* Multiple Glowing Rings */}
+              <div className="absolute -inset-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 blur opacity-40 group-hover:opacity-70 transition duration-1000" />
+              <div className="absolute -inset-3 rounded-full border border-blue-500/20 opacity-60" />
 
-              <span className="text-[11px] md:text-xs uppercase tracking-[0.2em] font-light text-blue-100 opacity-90">Live</span>
-              <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-md">Translator</span>
-            </button>
+              <button 
+                onClick={() => startTranslation(sourceLang, targetLang, captureMode)}
+                className="
+                  w-[140px] h-[140px] md:w-[180px] md:h-[180px]
+                  rounded-full
+                  bg-gradient-to-b from-[#2563EB] via-[#1D4ED8] to-[#1E3A8A]
+                  text-white
+                  border-2 border-blue-400/40
+                  shadow-[0_0_35px_rgba(37,99,235,0.6),inset_0_4px_12px_rgba(255,255,255,0.3)]
+                  transition-all duration-300
+                  hover:scale-105 active:scale-95
+                  flex flex-col items-center justify-center select-none p-2
+                  animate-breathe
+                "
+              >
+                {/* Premium Translation Custom Styled Icon */}
+                <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                
+                {/* Text Typography */}
+                <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">Live</span>
+                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
+              </button>
+            </div>
           )}
         </div>
       </main>
