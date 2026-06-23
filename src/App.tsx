@@ -459,11 +459,11 @@ export default function App() {
               <option value="fr" className="bg-[#171A21] text-white">បារាំង (French)</option>
               <option value="de" className="bg-[#171A21] text-white">អាល្លឺម៉ង់ (German)</option>
               <option value="no" className="bg-[#171A21] text-white">ន័រវែស (Norwegian)</option>
-              <option value="hi" className="bg-[#171A21] text-white">ហិណ្ឌី (Hindi)</option>
+              <option value="hi" className="bg-[#171A21] text-white">ឥណ្ឌា (Hindi)</option>
               <option value="fil" className="bg-[#171A21] text-white">ហ្វីលីពិន (Filipino)</option>
               <option value="mn" className="bg-[#171A21] text-white">ម៉ុងហ្គោលី (Mongolian)</option>
               <option value="it" className="bg-[#171A21] text-white">អ៊ីតាលី (Italian)</option>
-              <option value="he" className="bg-[#171A21] text-white">ហេប្រឺ (Hebrew)</option>
+              <option value="he" className="bg-[#171A21] text-white">អ៊ីស្រាអែល (Hebrew)</option>
               <option value="ru" className="bg-[#171A21] text-white">រុស្ស៊ី (Russian)</option>
               <option value="my" className="bg-[#171A21] text-white">ភូមា (Burmese)</option>
             </select>
@@ -496,11 +496,11 @@ export default function App() {
               <option value="fr" className="bg-[#171A21] text-white">បារាំង (French)</option>
               <option value="de" className="bg-[#171A21] text-white">អាល្លឺម៉ង់ (German)</option>
               <option value="no" className="bg-[#171A21] text-white">ន័រវែស (Norwegian)</option>
-              <option value="hi" className="bg-[#171A21] text-white">ហិណ្ឌី (Hindi)</option>
+              <option value="hi" className="bg-[#171A21] text-white">ឥណ្ឌា (Hindi)</option>
               <option value="fil" className="bg-[#171A21] text-white">ហ្វីលីពិន (Filipino)</option>
               <option value="mn" className="bg-[#171A21] text-white">ម៉ុងហ្គោលី (Mongolian)</option>
               <option value="it" className="bg-[#171A21] text-white">អ៊ីតាលី (Italian)</option>
-              <option value="he" className="bg-[#171A21] text-white">ហេប្រឺ (Hebrew)</option>
+              <option value="he" className="bg-[#171A21] text-white">អ៊ីស្រាអែល (Hebrew)</option>
               <option value="ru" className="bg-[#171A21] text-white">រុស្ស៊ី (Russian)</option>
               <option value="my" className="bg-[#171A21] text-white">ភូមា (Burmese)</option>
             </select>
