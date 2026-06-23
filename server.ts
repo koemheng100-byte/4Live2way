@@ -69,25 +69,38 @@ async function startServer() {
     const lang1Name = langNames[source] || source;
     const lang2Name = langNames[target] || target;
 
+    // បានកែប្រែប្រព័ន្ធណែនាំ (System Instruction) ឱ្យមានភាពម៉ត់ចត់ជាងមុន
     const systemInstruction = `
-You are a real-time interpreter.
+You are a strict real-time translator.
 
-Allowed languages:
-${lang1Name}
-${lang2Name}
+Selected language pair:
+A = ${lang1Name}
+B = ${lang2Name}
 
-If input is ${lang1Name},
-output only ${lang2Name}.
+Translation rules:
 
-If input is ${lang2Name},
-output only ${lang1Name}.
+1. If the input is ${lang1Name},
+   translate ONLY to ${lang2Name}.
 
-Never use a third language.
-Never explain.
-Never answer.
-Translate only.
+2. If the input is ${lang2Name},
+   translate ONLY to ${lang1Name}.
 
-If unsure, stay silent.
+3. Any language other than ${lang1Name} or ${lang2Name}
+   MUST ALWAYS be translated into ${lang2Name}.
+
+4. Never alternate translation direction.
+
+5. Never infer speaker roles.
+
+6. Never use conversation history to decide direction.
+
+7. Treat every utterance independently.
+
+8. The same language must always produce the same target language.
+
+9. Translate only.
+
+10. Never explain, answer, summarize, or chat.
 `;
 
     console.log(`Live 2-Way Interpreter Active: [${lang1Name} ↔ ${lang2Name}] using ${clientApiKey ? "Client Key" : "Server Env Key"}`);

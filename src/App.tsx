@@ -312,6 +312,34 @@ export default function App() {
   return (
     <div className="w-full h-screen bg-[#0F1115] text-[#FFFFFF] font-['Inter','Noto_Sans_Khmer',sans-serif] flex flex-col overflow-hidden relative antialiased">
       
+      {/* INJECT CUSTOM CSS ANIMATIONS FOR THE PREMIUM AI ORB */}
+      <style>{`
+        @keyframes orb-breathe {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 25px rgba(79, 124, 255, 0.4); }
+          50% { transform: scale(1.03); box-shadow: 0 0 45px rgba(79, 124, 255, 0.7); }
+        }
+        @keyframes orb-float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-6px); }
+        }
+        @keyframes robot-blink {
+          0%, 90%, 100% { transform: scaleY(1); }
+          95% { transform: scaleY(0.1); }
+        }
+        @keyframes sound-wave-bar {
+          0%, 100% { height: 6px; }
+          50% { height: 20px; }
+        }
+        .animate-orb-breathe { animation: orb-breathe 4s ease-in-out infinite; }
+        .animate-orb-float { animation: orb-float 3s ease-in-out infinite; }
+        .animate-robot-blink { animation: robot-blink 1.5s ease-in-out infinite; }
+        .animate-wave-1 { animation: sound-wave-bar 0.6s ease-in-out infinite alternate; }
+        .animate-wave-2 { animation: sound-wave-bar 0.4s ease-in-out infinite alternate 0.1s; }
+        .animate-wave-3 { animation: sound-wave-bar 0.7s ease-in-out infinite alternate 0.2s; }
+        .animate-wave-4 { animation: sound-wave-bar 0.5s ease-in-out infinite alternate 0.15s; }
+        .animate-wave-5 { animation: sound-wave-bar 0.6s ease-in-out infinite alternate 0.3s; }
+      `}</style>
+
       {/* HEADER */}
       <header className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#171A21]/40 backdrop-blur-xl z-10">
         <div className="flex items-center space-x-3">
@@ -372,7 +400,7 @@ export default function App() {
       </header>
 
       {/* MAIN LAYOUT */}
-      <main className="flex-1 max-w-md w-full mx-auto flex flex-col p-5 justify-between overflow-hidden relative">
+      <main className="flex-1 max-w-md w-full mx-auto flex flex-col p-5 overflow-hidden relative">
         
         {/* LANGUAGE SELECTOR */}
         <div className="w-full flex items-center justify-center space-x-2 bg-white/5 border border-white/10 backdrop-blur-xl rounded-full p-1 shadow-sm">
@@ -430,7 +458,7 @@ export default function App() {
         </div>
 
         {/* CONVERSATION BUBBLES CONTAINER */}
-        <div className="flex-1 w-full my-4 overflow-y-auto space-y-4 pr-1 scrollbar-none flex flex-col justify-end">
+        <div className="flex-1 w-full my-4 overflow-y-auto pb-8 space-y-4 pr-1 scrollbar-none flex flex-col justify-end">
           {transcript.length === 0 ? (
             <div className="h-full flex items-center justify-center text-center p-6">
               <p className="text-xs text-[#A1A1AA] max-w-[240px] leading-relaxed">
@@ -456,22 +484,76 @@ export default function App() {
           )}
         </div>
 
-        {/* CONTROL BUTTONS */}
-        <div className="w-full z-10 pt-2 pb-6">
+        {/* REDESIGNED PREMIUM AI ORB CONTROL BUTTONS */}
+        <div className="w-full flex justify-center z-10 pt-2 pb-10 items-center min-h-[220px]">
           {connected ? (
-            <button 
-              onClick={stopTranslation}
-              className="w-full h-14 px-8 rounded-2xl bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-400 font-semibold text-sm transition-all duration-200 active:scale-[0.99] flex items-center justify-center space-x-2"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></div>
-              <span>End Live Translator</span>
-            </button>
+            <div className="relative flex items-center justify-center animate-orb-float">
+              {/* Continuous Outer Pulse Ring */}
+              <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" style={{ animationDuration: '2s' }} />
+              
+              {/* Sound Wave Animation Elements */}
+              <div className="absolute -left-12 flex items-center gap-1 h-8">
+                <div className="w-1 bg-red-400 rounded-full animate-wave-1" />
+                <div className="w-1 bg-red-500 rounded-full animate-wave-2" />
+                <div className="w-1 bg-red-400 rounded-full animate-wave-3" />
+              </div>
+              <div className="absolute -right-12 flex items-center gap-1 h-8">
+                <div className="w-1 bg-red-400 rounded-full animate-wave-3" />
+                <div className="w-1 bg-red-500 rounded-full animate-wave-4" />
+                <div className="w-1 bg-red-400 rounded-full animate-wave-5" />
+              </div>
+
+              {/* Stop State Premium AI Orb */}
+              <button 
+                onClick={stopTranslation}
+                className="
+                  w-[140px] h-[140px] md:w-[180px] md:h-[180px]
+                  rounded-full
+                  bg-gradient-to-br from-red-500 via-red-600 to-rose-800
+                  text-white
+                  shadow-[0_0_35px_rgba(239,68,68,0.6)]
+                  border-2 border-red-400/30
+                  transition-all duration-300
+                  hover:scale-105 active:scale-95
+                  flex flex-col items-center justify-center p-4 select-none
+                "
+              >
+                {/* Robot Eyes with Blinking System */}
+                <div className="flex gap-4 mb-2 justify-center items-center h-4">
+                  <div className="w-3 h-3 md:w-4 md:h-4 bg-white rounded-full shadow-[0_0_10px_#fff] animate-robot-blink" />
+                  <div className="w-3 h-3 md:w-4 md:h-4 bg-white rounded-full shadow-[0_0_10px_#fff] animate-robot-blink" />
+                </div>
+
+                <span className="text-[11px] md:text-xs uppercase tracking-[0.2em] font-light text-red-100 opacity-90">Stop</span>
+                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-md">Translator</span>
+              </button>
+            </div>
           ) : (
+            /* Idle State Premium AI Orb */
             <button 
               onClick={() => startTranslation(sourceLang, targetLang, captureMode)}
-              className="w-full h-14 px-8 rounded-2xl bg-[#4F7CFF] hover:bg-[#3B66F0] text-white font-semibold text-sm transition-all duration-200 shadow-lg shadow-blue-600/10 active:scale-[0.99] flex items-center justify-center"
+              className="
+                w-[140px] h-[140px] md:w-[180px] md:h-[180px]
+                rounded-full
+                bg-gradient-to-br from-[#4F7CFF] via-[#2E5BFF] to-[#1A3BB5]
+                text-white
+                border-2 border-blue-400/20
+                transition-all duration-300
+                hover:scale-105 active:scale-95
+                flex flex-col items-center justify-center p-4 select-none
+                animate-orb-breathe
+              "
             >
-              Live Translator
+              <Languages size={26} className="mb-2 text-blue-100 drop-shadow-[0_0_6px_rgba(255,255,255,0.6)] md:w-8 md:h-8" />
+              
+              {/* Normal Standing Robot Eyes */}
+              <div className="flex gap-3 mb-2 justify-center items-center">
+                <div className="w-2.5 h-2.5 bg-cyan-300 rounded-full shadow-[0_0_8px_#22d3ee]" />
+                <div className="w-2.5 h-2.5 bg-cyan-300 rounded-full shadow-[0_0_8px_#22d3ee]" />
+              </div>
+
+              <span className="text-[11px] md:text-xs uppercase tracking-[0.2em] font-light text-blue-100 opacity-90">Live</span>
+              <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-md">Translator</span>
             </button>
           )}
         </div>
