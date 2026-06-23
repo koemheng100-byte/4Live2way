@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useEffect, useRef, useState } from 'react';
-// បន្ថែម Premium Icons សម្រាប់មុខងារ Settings និង Key Visibility
-import { Mic, Monitor, Languages, ArrowLeftRight, Settings, Eye, EyeOff, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Mic, Monitor, Languages, ArrowLeftRight } from 'lucide-react';
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -32,11 +31,20 @@ export default function App() {
   // --- បន្ថែម State សម្រាប់ចំណាំពេលអ្នកប្រើកំពុងចុច Focus លើ Select ភាសា ---
   const [focusedSelect, setFocusedSelect] = useState<'source' | 'target' | null>(null);
 
-  // --- API KEY & SETTINGS STATE ---
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_live_api_key') || '');
-  const [showKey, setShowKey] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  // --- ទាញយក Token ពី URL Query parameters (?token=abc123xyz) ---
+  const [token] = useState(() => {
+    return new URLSearchParams(window.location.search).get("token") || "";
+  });
+
+  // --- បន្ថែម State សម្រាប់រក្សាទុក User ID (Phase 2) ---
+  const [userId] = useState(() => {
+    let id = localStorage.getItem("userId");
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem("userId", id);
+    }
+    return id;
+  });
 
   const wsRef = useRef<WebSocket | null>(null);
   const inputAudioCtxRef = useRef<AudioContext | null>(null);
@@ -59,43 +67,6 @@ export default function App() {
       if (duckTimeoutRef.current) clearTimeout(duckTimeoutRef.current);
     };
   }, []);
-
-  // មុខងាររក្សាទុក API Key ចូលក្នុង LocalStorage
-  const handleSaveKey = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem('gemini_live_api_key', apiKey.trim());
-      alert("API Key ត្រូវបានរក្សាទុកដោយជោគជ័យ!");
-    }
-  };
-
-  // មុខងារលុប API Key ចេញពី LocalStorage
-  const handleRemoveKey = () => {
-    localStorage.removeItem('gemini_live_api_key');
-    setApiKey('');
-    setTestStatus('idle');
-    alert("API Key ត្រូវបានលុបចេញពីឧបករណ៍នេះ!");
-  };
-
-  // មុខងារសាកល្បងភ្ជាប់ API Key (Test Connection)
-  const handleTestConnection = async () => {
-    if (!apiKey.trim()) return;
-    setTestStatus('testing');
-    try {
-      const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const testWs = new WebSocket(`${wsProtocol}//${location.host}/live?source=km&target=en&apiKey=${encodeURIComponent(apiKey.trim())}`);
-      
-      testWs.onopen = () => {
-        setTestStatus('success');
-        setTimeout(() => testWs.close(), 1000);
-      };
-
-      testWs.onerror = () => {
-        setTestStatus('failed');
-      };
-    } catch (err) {
-      setTestStatus('failed');
-    }
-  };
 
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
     const binary = atob(base64Audio);
@@ -170,12 +141,6 @@ export default function App() {
   };
 
   const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode) => {
-    if (!apiKey.trim()) {
-      setIsSettingsOpen(true);
-      alert("សូមកំណត់ និងរក្សាទុក Gemini API Key របស់អ្នកជាមុនសិន!");
-      return;
-    }
-
     try {
       let stream: MediaStream;
       let audioStream: MediaStream;
@@ -216,8 +181,9 @@ export default function App() {
       mediaStreamRef.current = audioStream;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       
+      // កែសម្រួល URL ដើម្បីផ្ញើ userId និង token ទៅកាន់ Server (Phase 4)
       const ws = new WebSocket(
-        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&apiKey=${encodeURIComponent(apiKey.trim() || "")}`
+        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&userId=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`
       );
       wsRef.current = ws;
 
@@ -252,6 +218,14 @@ export default function App() {
 
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
+        
+        // បង្ហាញ Error Message ប្រសិនបើ Token មិនត្រឹមត្រូវ ឬ ហួសកំណត់
+        if (msg.error) {
+          alert(`កំហុសប្រព័ន្ធ (Error): ${msg.error}`);
+          stopTranslation();
+          return;
+        }
+
         if (msg.interrupted) {
           nextPlaybackTimeRef.current = outputAudioCtx.currentTime;
           return;
@@ -413,14 +387,6 @@ export default function App() {
               <Monitor size={14} />
             </button>
           </div>
-
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all"
-            title="API Settings"
-          >
-            <Settings size={14} />
-          </button>
         </div>
       </header>
 
@@ -444,7 +410,7 @@ export default function App() {
               onBlur={() => setFocusedSelect(null)}
               onChange={(e) => {
                 changeLanguages(e.target.value, targetLang);
-                e.target.blur(); // ដក focus ចេញក្រោយពេលជ្រើសរើសរួច
+                e.target.blur();
               }}
             >
               <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
@@ -489,7 +455,7 @@ export default function App() {
               onBlur={() => setFocusedSelect(null)}
               onChange={(e) => {
                 changeLanguages(sourceLang, e.target.value);
-                e.target.blur(); // ដក focus ចេញក្រោយពេលជ្រើសរើសរួច
+                e.target.blur();
               }}
             >
               <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
@@ -664,92 +630,6 @@ export default function App() {
       {liveSubtitle && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-black/70 border border-white/10 backdrop-blur-xl text-white text-base font-semibold text-center max-w-[85%] shadow-2xl pointer-events-none animate-fadeIn">
           {liveSubtitle}
-        </div>
-      )}
-
-      {/* PREMIUM SETTINGS MODAL */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fadeIn p-4">
-          <div className="bg-[#171A21] w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Settings size={16} className="text-[#4F7CFF]" />
-                <h2 className="text-sm font-semibold text-white">Configuration</h2>
-              </div>
-              <button 
-                onClick={() => { setIsSettingsOpen(false); setTestStatus('idle'); }}
-                className="text-[#A1A1AA] hover:text-white text-xs bg-white/5 px-2.5 py-1 rounded-md border border-white/5"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-wider text-[#A1A1AA] font-bold">Gemini API Key</label>
-                <div className="relative flex items-center">
-                  <input
-                    type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="AIzaSy..."
-                    className="w-full bg-black/30 border border-white/10 rounded-xl h-11 pl-3 pr-10 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[#4F7CFF] transition-all font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 text-[#A1A1AA] hover:text-white transition-colors"
-                  >
-                    {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
-
-              {testStatus !== 'idle' && (
-                <div className={`p-3 rounded-xl border text-xs flex items-center space-x-2 ${
-                  testStatus === 'testing' ? 'bg-yellow-500/5 border-yellow-500/20 text-yellow-400' :
-                  testStatus === 'success' ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' :
-                  'bg-red-500/5 border-red-500/20 text-red-400'
-                }`}>
-                  {testStatus === 'testing' && <div className="w-3 h-3 border-2 border-t-transparent border-yellow-400 rounded-full animate-spin"></div>}
-                  {testStatus === 'success' && <CheckCircle size={14} />}
-                  {testStatus === 'failed' && <XCircle size={14} />}
-                  <span>
-                    {testStatus === 'testing' && 'កំពុងសាកល្បងភ្ជាប់ទៅកាន់ Gemini...'}
-                    {testStatus === 'success' && 'ការភ្ជាប់ជោគជ័យ! API Key ត្រឹមត្រូវ។'}
-                    {testStatus === 'failed' && 'ការភ្ជាប់បរាជ័យ! សូមពិនិត្យ Key ម្តងទៀត។'}
-                  </span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <button
-                  onClick={handleSaveKey}
-                  disabled={!apiKey.trim()}
-                  className="h-10 rounded-xl bg-[#4F7CFF] hover:bg-[#3B66F0] text-white font-semibold text-xs transition-all disabled:opacity-40"
-                >
-                  Save Key
-                </button>
-                <button
-                  onClick={handleTestConnection}
-                  disabled={!apiKey.trim() || testStatus === 'testing'}
-                  className="h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-xs transition-all disabled:opacity-40"
-                >
-                  Test Connection
-                </button>
-              </div>
-
-              {localStorage.getItem('gemini_live_api_key') && (
-                <button
-                  onClick={handleRemoveKey}
-                  className="w-full h-10 rounded-xl bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 font-semibold text-xs transition-all flex items-center justify-center space-x-1.5"
-                >
-                  <Trash2 size={12} />
-                  <span>Remove Key from Browser</span>
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       )}
 
