@@ -32,23 +32,22 @@ async function startServer() {
   wss.on("connection", async (clientWs, req) => {
     console.log("Client connected via WebSocket");
     
-    // ចាប់យក URL parameters រួមទាំង dynamic API Key ពី Client 
+    // ចាប់យក URL parameters សម្រាប់តែភាសាប៉ុណ្ណោះ
     const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
     const source = url.searchParams.get("source") || "km";
     const target = url.searchParams.get("target") || "en";
-    const clientApiKey = url.searchParams.get("apiKey"); // ចាប់យក Key ដែលបានបញ្ជូនពី LocalStorage 
 
-    // ជ្រើសរើស Key ប្រើប្រាស់៖ បើ Client បញ្ជូនមក គឺប្រើរបស់ Client បើអត់ទេប្រើក្នុង .env 
-    const activeApiKey = clientApiKey || process.env.GEMINI_API_KEY;
+    // ប្រើប្រាស់ Key នៅក្នុង .env តែមួយគត់
+    const activeApiKey = process.env.GEMINI_API_KEY;
 
     if (!activeApiKey) {
-      console.error("Connection rejected: No API Key provided.");
-      clientWs.send(JSON.stringify({ error: "Missing Gemini API Key configuration." }));
+      console.error("Connection rejected: No API Key found in server environment.");
+      clientWs.send(JSON.stringify({ error: "Server missing Gemini API Key configuration." }));
       clientWs.close();
       return;
     }
     
-    // បង្កើត Instance របស់ GoogleGenAI ដោយផ្អែកលើ Key Dynamic 
+    // បង្កើត Instance របស់ GoogleGenAI ដោយប្រើ Server Key
     const ai = new GoogleGenAI({
       apiKey: activeApiKey,
       httpOptions: {
@@ -56,7 +55,6 @@ async function startServer() {
       }
     });
 
-    // បន្ថែមកូដសម្គាល់ឈ្មោះភាសាទាំង ២១ សម្រាប់ប្រើប្រាស់ក្នុង System Instruction របស់ AI
     const langNames: Record<string, string> = {
       'km': 'Khmer', 
       'en': 'English', 
@@ -84,7 +82,6 @@ async function startServer() {
     const lang1Name = langNames[source] || source;
     const lang2Name = langNames[target] || target;
 
-    // ប្រព័ន្ធណែនាំ (System Instruction) ឱ្យមានភាពម៉ត់ចត់ជាងមុន
     const systemInstruction = `
 You are a strict real-time translator.
 
@@ -118,7 +115,7 @@ Translation rules:
 10. Never explain, answer, summarize, or chat.
 `;
 
-    console.log(`Live 2-Way Interpreter Active: [${lang1Name} ↔ ${lang2Name}] using ${clientApiKey ? "Client Key" : "Server Env Key"}`);
+    console.log(`Live 2-Way Interpreter Active: [${lang1Name} ↔ ${lang2Name}] using Server Env Key`);
     
     let liveSession: any = null;
 
@@ -165,7 +162,7 @@ Translation rules:
 
     } catch (err) {
       console.error("Gemini Live connection failure:", err);
-      clientWs.send(JSON.stringify({ error: "Gemini session connection failed. Invalid Key?" }));
+      clientWs.send(JSON.stringify({ error: "Gemini session connection failed." }));
       clientWs.close();
     }
 
