@@ -54,6 +54,7 @@ export default function Admin() {
         onChange={(e) => setPlan(e.target.value)}
       >
         <option value="day">Day</option>
+        <option value="week">Week</option>
         <option value="month">Month</option>
         <option value="year">Year</option>
       </select>
@@ -70,7 +71,7 @@ export default function Admin() {
       <br />
       <br />
 
-      <button onClick={createUser}>Create User</button>
+      <button onClick={createUser}>Save</button>
     </div>
   );
 }
