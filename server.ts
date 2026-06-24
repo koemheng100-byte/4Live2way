@@ -82,10 +82,10 @@ async function startServer() {
   });
 
   // ====================================================
-  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (ចំណុចទី ៥៖ បន្ថែម WHERE deleted != 1)
+  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (កែប្រែទៅជា POST /api/admin/users)
   // ====================================================
-  app.get("/api/users", (req, res) => {
-    const { password } = req.query;
+  app.post("/api/admin/users", (req, res) => {
+    const { password } = req.body;
 
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ error: "Password មិនត្រឹមត្រូវទេ!" });
