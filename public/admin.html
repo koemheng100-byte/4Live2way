@@ -42,6 +42,13 @@
                 មើល User ទាំងអស់
             </button>
 
+            <input
+                id="searchUser"
+                placeholder="ស្វែងរក User ID..."
+                oninput="loadUsers()"
+                class="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl mb-3 text-sm focus:outline-none focus:border-cyan-500"
+            />
+
             <div id="usersList" class="mt-4 text-xs space-y-3 max-h-[400px] overflow-y-auto pr-1"></div>
         </div>
     </div>
@@ -72,7 +79,6 @@
                 } else {
                     alert("ជោគជ័យ៖ បានបើកសិទ្ធិជូន ID " + userId + " រួចរាល់!");
                     document.getElementById('userId').value = "";
-                    // បើកំពុងបើកមើលបញ្ជី ឱ្យវា update ភ្លាមៗ
                     if(document.getElementById('usersList').innerHTML !== "") {
                         loadUsers();
                     }
@@ -81,7 +87,6 @@
             .catch(err => alert("មានបញ្ហាការតភ្ជាប់ទៅកាន់ Server៖ " + err));
         }
 
-        // មុខងារបន្ថែមថ្មីសម្រាប់គ្រប់គ្រង User
         function loadUsers() {
             const password = document.getElementById('password').value;
 
@@ -97,20 +102,35 @@
                 if(!data.users || data.users.length === 0) {
                     html = '<div class="text-center text-slate-500 py-4">មិនទាន់មានទិន្នន័យ User ឡើយ</div>';
                 } else {
-                    data.users.forEach(user => {
+                    // ទាញយកពាក្យគន្លឹះសម្រាប់ស្វែងរក
+                    const keyword = document.getElementById("searchUser").value.toLowerCase();
+
+                    data.users
+                    .filter(user => user.userId.toLowerCase().includes(keyword))
+                    .forEach(user => {
+                        // ពិនិត្យមើលស្ថានភាព Active / Expired
+                        const active = new Date(user.expiredAt).getTime() > Date.now();
+                        const statusText = active ? "Active" : "Expired";
+                        const statusColor = active ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30";
+
                         html += `
                         <div class="bg-white/5 border border-white/10 p-3.5 rounded-xl space-y-2">
                             <div class="flex justify-between items-center">
                                 <b class="text-cyan-400 font-mono text-sm">${user.userId}</b>
-                                <span class="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded-full font-mono">Active</span>
+                                <span class="${statusColor} px-2 py-0.5 rounded-full text-[10px] font-medium">
+                                    ${statusText}
+                                </span>
                             </div>
                             <div class="text-slate-300 space-y-0.5">
-                                <div><span class="text-slate-500">Expire:</span> <span class="font-mono text-amber-400">${user.expiredAt}</span></div>
+                                <div><span class="text-slate-500">Expire:</span> <span class="font-mono text-amber-400">${new Date(user.expiredAt).toLocaleString()}</span></div>
                                 <div class="truncate"><span class="text-slate-500">API:</span> <span class="font-mono text-slate-400">${user.geminiApiKey || 'Default'}</span></div>
                             </div>
 
-                            <div class="flex gap-2 pt-1">
-                                <button onclick="suspendUser('${user.userId}')" class="flex-1 bg-amber-600/20 text-amber-400 border border-amber-500/20 hover:bg-amber-600 hover:text-white py-1.5 rounded-lg font-medium transition-all text-[11px]">
+                            <div class="flex gap-1.5 pt-1">
+                                <button onclick="reactivateUser('${user.userId}')" class="flex-1 bg-green-600/20 text-green-400 border border-green-500/20 hover:bg-green-600 hover:text-white py-1.5 rounded-lg font-medium transition-all text-[11px]">
+                                    Activate
+                                </button>
+                                <button onclick="suspendUser('${user.userId}')" class="flex-1 bg-yellow-600/20 text-yellow-400 border border-yellow-500/20 hover:bg-yellow-600 hover:text-white py-1.5 rounded-lg font-medium transition-all text-[11px]">
                                     Suspend
                                 </button>
                                 <button onclick="deleteUser('${user.userId}')" class="flex-1 bg-rose-600/20 text-rose-400 border border-rose-500/20 hover:bg-rose-600 hover:text-white py-1.5 rounded-lg font-medium transition-all text-[11px]">
@@ -136,6 +156,27 @@
                 body: JSON.stringify({ password, userId })
             })
             .then(res => res.json())
+            .then(data => {
+                if(data.error) alert(data.error);
+                loadUsers();
+            })
+            .catch(() => loadUsers());
+        }
+
+        // មុខងារ Reactivate ដែលបានបន្ថែមថ្មី
+        function reactivateUser(userId) {
+            const password = document.getElementById('password').value;
+
+            fetch('/api/admin/reactivate-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    password,
+                    userId,
+                    days: 30
+                })
+            })
+            .then(r => r.json())
             .then(data => {
                 if(data.error) alert(data.error);
                 loadUsers();

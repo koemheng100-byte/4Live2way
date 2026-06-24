@@ -125,6 +125,29 @@ async function startServer() {
     }
   });
 
+  // API ថ្មី៖ សម្រាប់ Admin បើកដំណើរការ User ឡើងវិញ (Reactivate)
+  app.post("/api/admin/reactivate-user", (req, res) => {
+    const { password, userId, days } = req.body;
+
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: "Password មិនត្រឹមត្រូវ" });
+    }
+
+    try {
+      const expiredAt = new Date(
+        Date.now() + (days || 30) * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      db.prepare(
+        "UPDATE users SET expiredAt = ? WHERE userId = ?"
+      ).run(expiredAt, userId);
+
+      res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // API ពិសេសសម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID
   app.post("/api/admin/set-user", (req, res) => {
     const { password, userId, days, geminiApiKey } = req.body;
