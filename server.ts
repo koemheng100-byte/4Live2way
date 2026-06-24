@@ -4,17 +4,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import { GoogleGenAI, Modality } from "@google/genai";
-import { db } from "./db";
-
-// ធានាថាមាន Column deleted នៅក្នុង Database Table (ចំណុចទី ២)
-try {
-  db.exec(`
-    ALTER TABLE users
-    ADD COLUMN deleted INTEGER DEFAULT 0
-  `);
-} catch (err) {
-  // ប្រសិនបើមាន column នេះរួចហើយ វានឹងរំលងដោយមិនមានបញ្ហាអ្វីឡើយ
-}
+import { pool } from "./db";
 
 async function startServer() {
   const app = express();
@@ -25,12 +15,14 @@ async function startServer() {
 
   console.log("Default Environment API KEY:", process.env.GEMINI_API_KEY ? "FOUND" : "MISSING");
 
-  // API សម្រាប់ Client ឆែកស្ថានភាព ID របស់ខ្លួន (ចំណុចទី ៤៖ បន្ថែម AND deleted != 1)
-  app.get("/api/check-status/:userId", (req, res) => {
+  // API សម្រាប់ Client ឆែកស្ថានភាព ID របស់ខ្លួន (កែប្រែតាមចំណុចទី ២)
+  app.get("/api/check-status/:userId", async (req, res) => {
     const { userId } = req.params;
 
     try {
-      const user = db.prepare("SELECT * FROM users WHERE userId = ? AND deleted != 1").get(userId) as any;
+      // 🔗 កូដថ្មីសម្រាប់ទាញទិន្នន័យពី Neon
+      const result = await pool.query("SELECT * FROM users WHERE userId = $1 AND deleted != 1", [userId]);
+      const user = result.rows[0];
 
       if (!user) {
         return res.json({
@@ -40,27 +32,26 @@ async function startServer() {
         });
       }
 
-      const isExpired =
-        new Date(user.expiredAt).getTime() < Date.now();
+      const isExpired = new Date() > new Date(user.expiredat); // ⚠️ ចំណាំ៖ pg នឹងប្ដូរឈ្មោះ column ទៅជាអក្សរតូច (expiredat)
 
       res.json({
         active: !isExpired,
-        expiredAt: user.expiredAt,
-        phoneNumber: user.phoneNumber || ""
+        expiredAt: user.expiredat,
+        phoneNumber: user.phonenumber || ""
       });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+    } catch (err) {
+      res.status(500).json({ error: "Database error occurred." });
     }
   });
 
-  // API សម្រាប់ឱ្យ Client ផ្ញើលេខទូរស័ព្ទមក Save ភ្ជាប់ជាមួយ ID (ចំណុចទី ១ និងទី ៤)
-  app.post("/api/save-phone", (req, res) => {
+  // API សម្រាប់ឱ្យ Client ផ្ញើលេខទូរស័ព្ទមក Save ភ្ជាប់ជាមួយ ID (រក្សាទុក Logic ដើមដោយប្តូរទៅប្រើ pool ស្របតាមទម្រង់ទិន្នន័យអក្សរតូចរបស់ pg)
+  app.post("/api/save-phone", async (req, res) => {
     const { userId, phoneNumber } = req.body;
     if (!userId) return res.status(400).json({ error: "Missing userId" });
 
     try {
-      // ឆែកមើលថាតើមាន User រួចហើយឬនៅ និងមិនទាន់លុប (deleted != 1)
-      const user = db.prepare("SELECT * FROM users WHERE userId = ? AND deleted != 1").get(userId) as any;
+      const result = await pool.query("SELECT * FROM users WHERE userId = $1 AND deleted != 1", [userId]);
+      const user = result.rows[0];
 
       if (!user) {
         return res.status(404).json({
@@ -68,12 +59,11 @@ async function startServer() {
         });
       }
 
-      // កែប្រែទៅជា UPDATE វិញ ដើម្បីកុំឱ្យបង្កើត User ថ្មីដោយស្វ័យប្រវត្តិ
-      db.prepare(`
+      await pool.query(`
         UPDATE users
-        SET phoneNumber = ?
-        WHERE userId = ?
-      `).run(phoneNumber, userId);
+        SET phoneNumber = $1
+        WHERE userId = $2
+      `, [phoneNumber, userId]);
 
       res.json({ success: true, message: "រក្សាទុកលេខទូរស័ព្ទជោគជ័យ" });
     } catch (err: any) {
@@ -81,21 +71,21 @@ async function startServer() {
     }
   });
 
-  // ====================================================
-  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (កែប្រែថ្មីដើម្បីបង្ហាញ ENV DEFAULT KEY)
-  // ====================================================
-  app.post("/api/admin/users", (req, res) => {
+  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (កែប្រែតាមចំណុចទី ៥ និងរក្សាការគណនាស្ថិតិដើម)
+  app.post("/api/admin/users", async (req, res) => {
     const { password } = req.body;
 
     if (password !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: "Password មិនត្រឹមត្រូវទេ!" });
+      return res.status(401).json({ error: "លេខសម្ងាត់មិនត្រឹមត្រូវ!" });
     }
 
     try {
-      const rows = db.prepare("SELECT * FROM users WHERE deleted != 1").all() as any[];
+      // 🔗 កូដថ្មី
+      const result = await pool.query("SELECT * FROM users ORDER BY expiredAt DESC");
+      const rows = result.rows;
 
       const activeUsers = rows.filter(
-        u => new Date(u.expiredAt).getTime() > Date.now()
+        u => new Date(u.expiredat || u.expiredAt).getTime() > Date.now()
       ).length;
 
       const expiredUsers = rows.length - activeUsers;
@@ -106,21 +96,42 @@ async function startServer() {
         activeUsers,
         expiredUsers,
         users: rows.map(u => ({
-          ...u,
-          // បើមាន Key ផ្ទាល់ខ្លួន បង្ហាញ Key ខ្លួនឯង បើអត់ទេ បង្ហាញពាក្យ ENV DEFAULT KEY
-          apiDisplay: u.geminiApiKey
-            ? u.geminiApiKey.substring(0, 20) + "..."
+          userId: u.userid || u.userId,
+          phoneNumber: u.phonenumber || u.phoneNumber,
+          expiredAt: u.expiredat || u.expiredAt,
+          geminiApiKey: u.geminiapikey || u.geminiApiKey,
+          plan: u.plan,
+          deleted: u.deleted,
+          apiDisplay: (u.geminiapikey || u.geminiApiKey)
+            ? (u.geminiapikey || u.geminiApiKey).substring(0, 20) + "..."
             : "ENV DEFAULT KEY"
         })),
         envApiKey: process.env.GEMINI_API_KEY || "មិនទាន់មាន Key ក្នុង .env ទេ"
       });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+    } catch (err) {
+      res.status(500).json({ error: "Database error" });
     }
   });
 
-  // API សម្រាប់ Admin លុប User (ចំណុចទី ៣៖ ប្តូរពី DELETE ទៅជា UPDATE វិញ)
-  app.post("/api/admin/delete-user", (req, res) => {
+  // API សម្រាប់ Admin លុប User (កែប្រែតាមចំណុចទី ៤ - លុបដាច់)
+  app.post("/api/admin/delete-user", async (req, res) => {
+    const { password, userId } = req.body;
+
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: "លេខសម្ងាត់មិនត្រឹមត្រូវ!" });
+    }
+
+    try {
+      // 🔗 កូដថ្មី៖ លុបដាច់ចេញពី Neon Cloud Database តែម្តង លែងឱ្យមានឈ្មោះទៀតហើយ
+      await pool.query("DELETE FROM users WHERE userId = $1", [userId]);
+      res.json({ success: true, message: "បានលុប User នេះដាច់ដោយជោគជ័យ!" });
+    } catch (err) {
+      res.status(500).json({ error: "មិនអាចលុបបានទេ!" });
+    }
+  });
+
+  // API សម្រាប់ Admin ផ្អាកការប្រើប្រាស់របស់ User (កែប្រែទៅប្រើ pool)
+  app.post("/api/admin/suspend-user", async (req, res) => {
     const { password, userId } = req.body;
 
     if (password !== process.env.ADMIN_PASSWORD) {
@@ -128,29 +139,9 @@ async function startServer() {
     }
 
     try {
-      db.prepare(
-        "UPDATE users SET deleted = 1 WHERE userId = ?"
-      ).run(userId);
-      res.json({ success: true });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
-    }
-  });
-
-  // API សម្រាប់ Admin ផ្អាកការប្រើប្រាស់របស់ User (កំណត់ឱ្យអស់សុពលភាព)
-  app.post("/api/admin/suspend-user", (req, res) => {
-    const { password, userId } = req.body;
-
-    if (password !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: "Password មិនត្រឹមត្រូវ" });
-    }
-
-    try {
-      db.prepare(
-        "UPDATE users SET expiredAt = ? WHERE userId = ?"
-      ).run(
-        new Date(0).toISOString(),
-        userId
+      await pool.query(
+        "UPDATE users SET expiredAt = $1 WHERE userId = $2",
+        [new Date(0).toISOString(), userId]
       );
       res.json({ success: true });
     } catch (err: any) {
@@ -158,9 +149,9 @@ async function startServer() {
     }
   });
 
-  // API ថ្មី៖ សម្រាប់ Admin បើកដំណើរការ User ឡើងវិញ (Reactivate) - [កែប្រែរួចរាល់]
-  app.post("/api/admin/reactivate-user", (req, res) => {
-    const { password, userId, days, plan } = req.body; // 🔥 ទទួលយកតម្លៃ plan ពី client
+  // API សម្រាប់ Admin បើកដំណើរការ User ឡើងវិញ (Reactivate) (កែប្រែទៅប្រើ pool)
+  app.post("/api/admin/reactivate-user", async (req, res) => {
+    const { password, userId, days, plan } = req.body;
 
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ error: "Password មិនត្រឹមត្រូវ" });
@@ -171,10 +162,10 @@ async function startServer() {
         Date.now() + (days || 30) * 24 * 60 * 60 * 1000
       ).toISOString();
 
-      // 🔥 កែប្រែ SQL ឱ្យ Update ទាំង expiredAt, plan និង deleted = 0
-      db.prepare(
-        "UPDATE users SET expiredAt = ?, plan = ?, deleted = 0 WHERE userId = ?"
-      ).run(expiredAt, plan || "30 Days", userId);
+      await pool.query(
+        "UPDATE users SET expiredAt = $1, plan = $2, deleted = 0 WHERE userId = $3",
+        [expiredAt, plan || "30 Days", userId]
+      );
 
       res.json({ success: true });
     } catch (err: any) {
@@ -182,53 +173,41 @@ async function startServer() {
     }
   });
 
-  // API ពិសេសសម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID
-  app.post("/api/admin/set-user", (req, res) => {
-    const {
-      password,
-      userId,
-      days,
-      geminiApiKey,
-      plan
-    } = req.body;
+  // API ពិសេសសម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID (កែប្រែតាមចំណុចទី ៣ - ON CONFLICT)
+  app.post("/api/admin/set-user", async (req, res) => {
+    const { password, userId, days, plan, geminiApiKey } = req.body;
 
     if (password !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: "Password មិនត្រឹមត្រូវទេ!" });
+      return res.status(401).json({ error: "លេខសម្ងាត់មិនត្រឹមត្រូវ!" });
     }
 
-    if (!userId || days === undefined) {
-      return res.status(400).json({ error: "សូមបំពេញ userId និង days ឱ្យបានត្រឹមត្រូវ" });
-    }
-
-    const expiredDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    const daysNum = Number(days) || 30;
+    const expiredDate = new Date();
+    expiredDate.setDate(expiredDate.getDate() + daysNum);
 
     try {
-      db.prepare(
-        `
-        INSERT OR REPLACE INTO users
-        (userId, phoneNumber, expiredAt, geminiApiKey, plan, deleted)
-        VALUES (?, ?, ?, ?, ?, 0)
-        `
-      ).run(
-        userId,
-        "",
-        expiredDate.toISOString(),
-        geminiApiKey || null,
-        plan || "30 Days"
-      );
+      // 🔗 កូដថ្មីសម្រាប់ PostgreSQL (ប្រើ ON CONFLICT ជំនួស INSERT OR REPLACE)
+      await pool.query(`
+        INSERT INTO users (userId, phoneNumber, expiredAt, geminiApiKey, plan, deleted)
+        VALUES ($1, $2, $3, $4, $5, 0)
+        ON CONFLICT (userId) 
+        DO UPDATE SET 
+          expiredAt = EXCLUDED.expiredAt,
+          geminiApiKey = EXCLUDED.geminiApiKey,
+          plan = EXCLUDED.plan,
+          deleted = 0
+      `, [userId, "", expiredDate.toISOString(), geminiApiKey || null, plan || "30 Days"]);
 
-      res.json({
-        success: true,
-        message: `បានកំណត់ ID ${userId} ជោគជ័យ`
-      });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "មិនអាចរក្សាទុកក្នុង Database បានទេ!" });
     }
   });
 
-  // API ថ្មី៖ សម្រាប់ Admin ធ្វើបច្ចុប្បន្នភាព Plan របស់ User និងគណនាថ្ងៃ Expire ឡើងវិញ
-  app.post("/api/admin/update-plan", (req, res) => {
-    const { password, userId, plan, days } = req.body; // 🔥 ទទួលយកតម្លៃ days បន្ថែមពី Client
+  // API សម្រាប់ Admin ធ្វើបច្ចុប្បន្នភាព Plan របស់ User និងគណនាថ្ងៃ Expire ឡើងវិញ (កែប្រែទៅប្រើ pool)
+  app.post("/api/admin/update-plan", async (req, res) => {
+    const { password, userId, plan, days } = req.body;
 
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({
@@ -237,15 +216,14 @@ async function startServer() {
     }
 
     try {
-      // 🔥 គណនាថ្ងៃផុតកំណត់ (Expire) ថ្មី ចាប់គិតពីម៉ោងដែល Admin កំពុងចុច Edit នេះទៅ
       const newExpiredAt = new Date(
         Date.now() + (days || 30) * 24 * 60 * 60 * 1000
       ).toISOString();
 
-      // 🔥 កែប្រែ SQL ឱ្យ Update ទាំង plan ផង និង expiredAt ថ្មីផង
-      db.prepare(
-        "UPDATE users SET plan = ?, expiredAt = ? WHERE userId = ?"
-      ).run(plan, newExpiredAt, userId);
+      await pool.query(
+        "UPDATE users SET plan = $1, expiredAt = $2 WHERE userId = $3",
+        [plan, newExpiredAt, userId]
+      );
 
       res.json({ success: true });
     } catch (err: any) {
@@ -253,10 +231,8 @@ async function startServer() {
     }
   });
 
-  // ====================================================
-  // API ថ្មី៖ សម្រាប់ទទួលការកែប្រែ API Key ផ្ទាល់ខ្លួនរបស់ User (ប៊ូតុងខ្មៅដៃ)
-  // ====================================================
-  app.post("/api/admin/update-api-key", (req, res) => {
+  // API សម្រាប់ទទួលការកែប្រែ API Key ផ្ទាល់ខ្លួនរបស់ User (ប៊ូតុងខ្មៅដៃ) (កែប្រែទៅប្រើ pool)
+  app.post("/api/admin/update-api-key", async (req, res) => {
     const { password, userId, geminiApiKey } = req.body;
 
     if (password !== process.env.ADMIN_PASSWORD) {
@@ -264,9 +240,10 @@ async function startServer() {
     }
 
     try {
-      db.prepare(
-        "UPDATE users SET geminiApiKey = ? WHERE userId = ?"
-      ).run(geminiApiKey || null, userId);
+      await pool.query(
+        "UPDATE users SET geminiApiKey = $1 WHERE userId = $2",
+        [geminiApiKey || null, userId]
+      );
 
       res.json({ success: true, message: "ធ្វើបច្ចុប្បន្នភាព API Key ជោគជ័យ" });
     } catch (err: any) {
@@ -274,7 +251,7 @@ async function startServer() {
     }
   });
 
-  // បន្ថែម Route សម្រាប់ Admin Page នៅត្រង់នេះ
+  // Route សម្រាប់ Admin Page
   app.get("/admin.html", (req, res) => {
     res.sendFile(path.join(process.cwd(), "public", "admin.html"));
   });
@@ -305,22 +282,27 @@ async function startServer() {
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
 
-    // ទាញយកទិន្នន័យ User ពី Database សម្រាប់ WebSocket Connection (ចំណុចទី ៤៖ បន្ថែម AND deleted != 1)
+    // 🔗 កូដថ្មីនៅក្នុង WebSocket (កែប្រែតាមចំណុចទី ៦)
     try {
-      const user = db.prepare("SELECT * FROM users WHERE userId = ? AND deleted != 1").get(userId) as any;
+      const result = await pool.query("SELECT * FROM users WHERE userId = $1 AND deleted != 1", [userId]);
+      const user = result.rows[0];
 
-      const isExpired = user ? new Date(user.expiredAt).getTime() < Date.now() : true;
-
-      if (isExpired) {
-        console.error(`Connection rejected: ID ${userId} មិនទាន់បង់ប្រាក់ ឬអស់សុពលភាពប្រើប្រាស់។`);
-        clientWs.send(JSON.stringify({ error: "គណនី ID របស់អ្នកមិនមានសុពលភាព ឬអស់ថ្ងៃប្រើប្រាស់ហើយ។ សូមធ្វើការបង់ប្រាក់!" }));
+      if (!user) {
+        clientWs.send(JSON.stringify({ error: "User ID នេះមិនមានក្នុងប្រព័ន្ធ ឬត្រូវបានលុបចោលហើយ!" }));
         clientWs.close();
         return;
       }
 
-      const activeApiKey = user?.geminiApiKey || process.env.GEMINI_API_KEY;
+      const isExpired = new Date() > new Date(user.expiredat);
+      if (isExpired) {
+        clientWs.send(JSON.stringify({ error: "គណនីរបស់អ្នកបានហួសកាលកំណត់ប្រើប្រាស់ហើយ (Expired)!" }));
+        clientWs.close();
+        return;
+      }
 
-      if (!activeApiKey) {
+      const apiKeyToUse = user.geminiapikey || process.env.GEMINI_API_KEY;
+
+      if (!apiKeyToUse) {
         console.error("Connection rejected: No API Key found in server environment.");
         clientWs.send(JSON.stringify({ error: "Server missing Gemini API Key configuration." }));
         clientWs.close();
@@ -328,7 +310,7 @@ async function startServer() {
       }
       
       const ai = new GoogleGenAI({
-        apiKey: activeApiKey,
+        apiKey: apiKeyToUse,
         httpOptions: {
           headers: { 'User-Agent': 'aistudio-build' }
         }
