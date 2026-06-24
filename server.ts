@@ -88,6 +88,43 @@ async function startServer() {
     }
   });
 
+  // API សម្រាប់ Admin លុប User
+  app.post("/api/admin/delete-user", (req, res) => {
+    const { password, userId } = req.body;
+
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: "Password មិនត្រឹមត្រូវ" });
+    }
+
+    try {
+      db.prepare("DELETE FROM users WHERE userId = ?").run(userId);
+      res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // API សម្រាប់ Admin ផ្អាកការប្រើប្រាស់របស់ User (កំណត់ឱ្យអស់សុពលភាព)
+  app.post("/api/admin/suspend-user", (req, res) => {
+    const { password, userId } = req.body;
+
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: "Password មិនត្រឹមត្រូវ" });
+    }
+
+    try {
+      db.prepare(
+        "UPDATE users SET expiredAt = ? WHERE userId = ?"
+      ).run(
+        new Date(0).toISOString(),
+        userId
+      );
+      res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // API ពិសេសសម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID
   app.post("/api/admin/set-user", (req, res) => {
     const { password, userId, days, geminiApiKey } = req.body;

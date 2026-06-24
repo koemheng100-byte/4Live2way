@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#060913] text-white font-sans min-h-screen flex items-center justify-center p-4">
-    <div class="bg-[#111625] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+    <div class="bg-[#111625] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl my-8">
         <h2 class="text-xl font-black text-center text-cyan-400 mb-6">ផ្ទាំងគ្រប់គ្រង និងបើកសិទ្ធិ (Admin)</h2>
         
         <div class="space-y-4">
@@ -35,6 +35,14 @@
             <button onclick="activateUser()" class="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:brightness-110 py-3 rounded-xl font-bold text-sm shadow-lg shadow-cyan-500/20 transition-all active:scale-95 mt-2">
                 បើកសិទ្ធិប្រើប្រាស់ (Activate)
             </button>
+
+            <hr class="my-6 border-white/10">
+
+            <button onclick="loadUsers()" class="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:brightness-110 py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all active:scale-95">
+                មើល User ទាំងអស់
+            </button>
+
+            <div id="usersList" class="mt-4 text-xs space-y-3 max-h-[400px] overflow-y-auto pr-1"></div>
         </div>
     </div>
 
@@ -47,7 +55,6 @@
 
             if(!userId) return alert("សូមបំពេញ User ID របស់ភ្ញៀវ!");
 
-            // ផ្ញើទៅកាន់ API /api/admin/set-user ឱ្យត្រូវជាមួយកូដ server.ts របស់អ្នក
             fetch('/api/admin/set-user', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -64,10 +71,94 @@
                     alert("បរាជ័យ៖ " + data.error);
                 } else {
                     alert("ជោគជ័យ៖ បានបើកសិទ្ធិជូន ID " + userId + " រួចរាល់!");
-                    document.getElementById('userId').value = ""; // សំអាតប្រឡោះ ID
+                    document.getElementById('userId').value = "";
+                    // បើកំពុងបើកមើលបញ្ជី ឱ្យវា update ភ្លាមៗ
+                    if(document.getElementById('usersList').innerHTML !== "") {
+                        loadUsers();
+                    }
                 }
             })
             .catch(err => alert("មានបញ្ហាការតភ្ជាប់ទៅកាន់ Server៖ " + err));
+        }
+
+        // មុខងារបន្ថែមថ្មីសម្រាប់គ្រប់គ្រង User
+        function loadUsers() {
+            const password = document.getElementById('password').value;
+
+            fetch('/api/users?password=' + encodeURIComponent(password))
+            .then(r => r.json())
+            .then(data => {
+                if(data.error) {
+                    return alert("បរាជ័យ៖ " + data.error);
+                }
+
+                let html = '';
+                
+                if(!data.users || data.users.length === 0) {
+                    html = '<div class="text-center text-slate-500 py-4">មិនទាន់មានទិន្នន័យ User ឡើយ</div>';
+                } else {
+                    data.users.forEach(user => {
+                        html += `
+                        <div class="bg-white/5 border border-white/10 p-3.5 rounded-xl space-y-2">
+                            <div class="flex justify-between items-center">
+                                <b class="text-cyan-400 font-mono text-sm">${user.userId}</b>
+                                <span class="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded-full font-mono">Active</span>
+                            </div>
+                            <div class="text-slate-300 space-y-0.5">
+                                <div><span class="text-slate-500">Expire:</span> <span class="font-mono text-amber-400">${user.expiredAt}</span></div>
+                                <div class="truncate"><span class="text-slate-500">API:</span> <span class="font-mono text-slate-400">${user.geminiApiKey || 'Default'}</span></div>
+                            </div>
+
+                            <div class="flex gap-2 pt-1">
+                                <button onclick="suspendUser('${user.userId}')" class="flex-1 bg-amber-600/20 text-amber-400 border border-amber-500/20 hover:bg-amber-600 hover:text-white py-1.5 rounded-lg font-medium transition-all text-[11px]">
+                                    Suspend
+                                </button>
+                                <button onclick="deleteUser('${user.userId}')" class="flex-1 bg-rose-600/20 text-rose-400 border border-rose-500/20 hover:bg-rose-600 hover:text-white py-1.5 rounded-lg font-medium transition-all text-[11px]">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                        `;
+                    });
+                }
+
+                document.getElementById('usersList').innerHTML = html;
+            })
+            .catch(err => alert("មានបញ្ហាទាញយកទិន្នន័យ៖ " + err));
+        }
+
+        function suspendUser(userId) {
+            const password = document.getElementById('password').value;
+
+            fetch('/api/admin/suspend-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password, userId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) alert(data.error);
+                loadUsers();
+            })
+            .catch(() => loadUsers());
+        }
+
+        function deleteUser(userId) {
+            if(!confirm("តើអ្នកពិតជាចង់លុប User ID: " + userId + " នេះមែនទេ?")) return;
+
+            const password = document.getElementById('password').value;
+
+            fetch('/api/admin/delete-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password, userId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) alert(data.error);
+                loadUsers();
+            })
+            .catch(() => loadUsers());
         }
     </script>
 </body>
