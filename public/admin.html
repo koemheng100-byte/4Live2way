@@ -139,8 +139,19 @@
                             </div>
                             <div class="text-slate-300 space-y-0.5">
                                 <div><span class="text-slate-500">Expire:</span> <span class="font-mono text-amber-400">${new Date(user.expiredAt).toLocaleString()}</span></div>
-                                <div class="truncate"><span class="text-slate-500">API:</span> <span class="font-mono text-slate-400">${user.geminiApiKey || 'Server Default Key'}</span></div>
-                                <div><span class="text-slate-500">Plan:</span> <span class="text-cyan-400 font-medium">${user.plan || 'Custom'}</span></div>
+                                <div class="truncate flex items-center gap-1"><span class="text-slate-500">API:</span> 
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="editApiKey('${user.userId}')" class="bg-blue-600 px-2 py-1 rounded text-[10px]">✏️</button>
+                                        <span class="font-mono text-slate-400">${user.apiDisplay}</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-slate-500">Plan:</span>
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="editPlan('${user.userId}')" class="bg-yellow-600 px-2 py-1 rounded text-[10px]">✏️</button>
+                                        <span class="text-cyan-400 font-medium">${user.plan || '30 Days'}</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="grid grid-cols-2 gap-1.5 pt-1">
@@ -203,7 +214,6 @@
             .catch(() => loadUsers());
         }
 
-        // មុខងារ Edit API Key ដែលបានបន្ថែមថ្មី
         function editApiKey(userId){
             const newKey = prompt("បញ្ចូល API Key ថ្មី");
             if(!newKey) return;
@@ -227,6 +237,27 @@
                 loadUsers();
             })
             .catch(() => loadUsers());
+        }
+
+        // មុខងារ Edit Plan ដែលបានកែប្រែថ្មី
+        function editPlan(userId){
+            const plan = prompt("1 Days / 1Week / 1Month");
+            if(!plan) return;
+
+            const password = document.getElementById("password").value;
+
+            fetch("/api/admin/update-plan",{
+                method:"POST",
+                headers:{
+                    "Content-Type":"application/json"
+                },
+                body:JSON.stringify({
+                    password,
+                    userId,
+                    plan
+                })
+            })
+            .then(()=>loadUsers());
         }
 
         function deleteUser(userId) {

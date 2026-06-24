@@ -8,6 +8,7 @@ db.exec(`
     userId TEXT PRIMARY KEY,
     phoneNumber TEXT,
     expiredAt TEXT,
-    geminiApiKey TEXT
+    geminiApiKey TEXT,
+    plan TEXT DEFAULT '30 Days'
   )
 `);

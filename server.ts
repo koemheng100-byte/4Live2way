@@ -91,10 +91,9 @@ async function startServer() {
         expiredUsers,
         users: rows.map(u => ({
           ...u,
-          plan:
-            u.expiredAt
-              ? "Custom"
-              : "Unknown"
+          apiDisplay: u.geminiApiKey
+            ? u.geminiApiKey.substring(0, 20) + "..."
+            : "ENV DEFAULT KEY"
         }))
       });
     } catch (err: any) {
@@ -164,7 +163,13 @@ async function startServer() {
 
   // API ពិសេសសម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID
   app.post("/api/admin/set-user", (req, res) => {
-    const { password, userId, days, geminiApiKey } = req.body;
+    const {
+      password,
+      userId,
+      days,
+      geminiApiKey,
+      plan
+    } = req.body;
 
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ error: "Password មិនត្រឹមត្រូវទេ!" });
@@ -180,20 +185,42 @@ async function startServer() {
       db.prepare(
         `
         INSERT OR REPLACE INTO users
-        (userId, phoneNumber, expiredAt, geminiApiKey)
-        VALUES (?, ?, ?, ?)
+        (userId, phoneNumber, expiredAt, geminiApiKey, plan)
+        VALUES (?, ?, ?, ?, ?)
         `
       ).run(
         userId,
         "",
         expiredDate.toISOString(),
-        geminiApiKey || null
+        geminiApiKey || null,
+        plan || "30 Days"
       );
 
       res.json({
         success: true,
         message: `បានកំណត់ ID ${userId} ជោគជ័យ`
       });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // API ថ្មី៖ សម្រាប់ Admin ធ្វើបច្ចុប្បន្នភាព Plan របស់ User
+  app.post("/api/admin/update-plan", (req, res) => {
+    const { password, userId, plan } = req.body;
+
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({
+        error: "Password មិនត្រឹមត្រូវ"
+      });
+    }
+
+    try {
+      db.prepare(
+        "UPDATE users SET plan = ? WHERE userId = ?"
+      ).run(plan, userId);
+
+      res.json({ success: true });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
