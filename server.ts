@@ -110,7 +110,9 @@ async function startServer() {
           apiDisplay: u.geminiApiKey
             ? u.geminiApiKey.substring(0, 20) + "..."
             : "ENV DEFAULT KEY"
-        }))
+        })),
+        // បន្ថែម envApiKey ផ្ញើទៅកាន់ Frontend ដូចការស្នើសុំ
+        envApiKey: process.env.GEMINI_API_KEY || "មិនទាន់មាន Key ក្នុង .env ទេ"
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });

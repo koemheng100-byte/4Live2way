@@ -28,7 +28,7 @@
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-400 font-bold mb-1 uppercase">Gemini API Key (ទុកទទេបើប្រើ Key រួម)</label>
+                <label class="block text-xs text-slate-400 font-bold mb-1 uppercase">Gemini API Key (ទុកទទេបើប្រើ Key រួម)<span id="default-key" class="text-cyan-400 font-mono lowercase"></span></label>
                 <input type="text" id="apiKey" placeholder="AIzaSy..." class="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-sm focus:outline-none focus:border-cyan-500 font-mono">
             </div>
             
@@ -89,14 +89,22 @@
             .catch(err => alert("មានបញ្ហាការតភ្ជាប់ទៅកាន់ Server៖ " + err));
         }
 
+        // បានកែប្រែអនុគមន៍ loadUsers() តាមការណែនាំរបស់អ្នក
         function loadUsers() {
             const password = document.getElementById('password').value;
 
-            fetch('/api/users?password=' + encodeURIComponent(password))
-            .then(r => r.json())
+            fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            })
+            .then(res => res.json())
             .then(data => {
-                if(data.error) {
-                    return alert("បរាជ័យ៖ " + data.error);
+                if(data.error) { alert(data.error); return; }
+                
+                // បន្ថែមបន្ទាត់នេះ ដើម្បីបង្ហាញ API Key ទៅលើចំណងជើង UI
+                if(document.getElementById("default-key")){
+                    document.getElementById("default-key").innerText = " (" + (data.envApiKey || 'No Default Key') + ")";
                 }
 
                 // បង្ហាញ Summary Card
@@ -239,7 +247,6 @@
             .catch(() => loadUsers());
         }
 
-        // មុខងារ Edit Plan ដែលបានកែប្រែថ្មី
         function editPlan(userId){
             const plan = prompt("1 Days / 1Week / 1Month");
             if(!plan) return;
