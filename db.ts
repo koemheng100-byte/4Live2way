@@ -19,3 +19,10 @@ try {
     ADD COLUMN plan TEXT DEFAULT '30 Days'
   `);
 } catch {}
+
+try {
+  db.exec(`
+    ALTER TABLE users
+    ADD COLUMN deleted INTEGER DEFAULT 0
+  `);
+} catch {}

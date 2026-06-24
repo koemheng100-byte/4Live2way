@@ -6,6 +6,16 @@ import { WebSocketServer } from "ws";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { db } from "./db";
 
+// ធានាថាមាន Column deleted នៅក្នុង Database Table (ចំណុចទី ២)
+try {
+  db.exec(`
+    ALTER TABLE users
+    ADD COLUMN deleted INTEGER DEFAULT 0
+  `);
+} catch (err) {
+  // ប្រសិនបើមាន column នេះរួចហើយ វានឹងរំលងដោយមិនមានបញ្ហាអ្វីឡើយ
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json());
@@ -15,12 +25,12 @@ async function startServer() {
 
   console.log("Default Environment API KEY:", process.env.GEMINI_API_KEY ? "FOUND" : "MISSING");
 
-  // API សម្រាប់ Client ឆែកស្ថានភាព ID របស់ខ្លួន
+  // API សម្រាប់ Client ឆែកស្ថានភាព ID របស់ខ្លួន (ចំណុចទី ៤៖ បន្ថែម AND deleted != 1)
   app.get("/api/check-status/:userId", (req, res) => {
     const { userId } = req.params;
 
     try {
-      const user = db.prepare("SELECT * FROM users WHERE userId = ?").get(userId) as any;
+      const user = db.prepare("SELECT * FROM users WHERE userId = ? AND deleted != 1").get(userId) as any;
 
       if (!user) {
         return res.json({
@@ -43,21 +53,27 @@ async function startServer() {
     }
   });
 
-  // API សម្រាប់ឱ្យ Client ផ្ញើលេខទូរស័ព្ទមក Save ភ្ជាប់ជាមួយ ID
+  // API សម្រាប់ឱ្យ Client ផ្ញើលេខទូរស័ព្ទមក Save ភ្ជាប់ជាមួយ ID (ចំណុចទី ១ និងទី ៤)
   app.post("/api/save-phone", (req, res) => {
     const { userId, phoneNumber } = req.body;
     if (!userId) return res.status(400).json({ error: "Missing userId" });
 
     try {
-      // ឆែកមើលថាតើមាន User រួចហើយឬនៅ ដើម្បីរក្សាថ្ងៃផុតកំណត់ចាស់ បើគ្មានទេបង្កើតថ្មីឱ្យ ២៤ម៉ោង
-      const user = db.prepare("SELECT * FROM users WHERE userId = ?").get(userId) as any;
+      // ឆែកមើលថាតើមាន User រួចហើយឬនៅ និងមិនទាន់លុប (deleted != 1)
+      const user = db.prepare("SELECT * FROM users WHERE userId = ? AND deleted != 1").get(userId) as any;
 
-      const expiredAt = user ? user.expiredAt : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      const geminiApiKey = user ? user.geminiApiKey : null;
+      if (!user) {
+        return res.status(404).json({
+          error: "User not found"
+        });
+      }
 
-      db.prepare(
-        `INSERT OR REPLACE INTO users (userId, phoneNumber, expiredAt, geminiApiKey) VALUES (?, ?, ?, ?)`
-      ).run(userId, phoneNumber, expiredAt, geminiApiKey);
+      // កែប្រែទៅជា UPDATE វិញ ដើម្បីកុំឱ្យបង្កើត User ថ្មីដោយស្វ័យប្រវត្តិ
+      db.prepare(`
+        UPDATE users
+        SET phoneNumber = ?
+        WHERE userId = ?
+      `).run(phoneNumber, userId);
 
       res.json({ success: true, message: "រក្សាទុកលេខទូរស័ព្ទជោគជ័យ" });
     } catch (err: any) {
@@ -66,7 +82,7 @@ async function startServer() {
   });
 
   // ====================================================
-  // API ថ្មី៖ សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (បានកែសម្រួល)
+  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (ចំណុចទី ៥៖ បន្ថែម WHERE deleted != 1)
   // ====================================================
   app.get("/api/users", (req, res) => {
     const { password } = req.query;
@@ -76,7 +92,7 @@ async function startServer() {
     }
 
     try {
-      const rows = db.prepare("SELECT * FROM users").all() as any[];
+      const rows = db.prepare("SELECT * FROM users WHERE deleted != 1").all() as any[];
 
       const activeUsers = rows.filter(
         u => new Date(u.expiredAt).getTime() > Date.now()
@@ -101,7 +117,7 @@ async function startServer() {
     }
   });
 
-  // API សម្រាប់ Admin លុប User
+  // API សម្រាប់ Admin លុប User (ចំណុចទី ៣៖ ប្តូរពី DELETE ទៅជា UPDATE វិញ)
   app.post("/api/admin/delete-user", (req, res) => {
     const { password, userId } = req.body;
 
@@ -110,7 +126,9 @@ async function startServer() {
     }
 
     try {
-      db.prepare("DELETE FROM users WHERE userId = ?").run(userId);
+      db.prepare(
+        "UPDATE users SET deleted = 1 WHERE userId = ?"
+      ).run(userId);
       res.json({ success: true });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
@@ -152,8 +170,8 @@ async function startServer() {
       ).toISOString();
 
       db.prepare(
-        "UPDATE users SET expiredAt = ? WHERE userId = ?"
-      ).run(expiredAt, userId);
+        "UPDATE users SET expiredAt = ?, deleted = 0 WHERE userId = ?"
+      ).run(expiredAt, userId); // បន្ថែម deleted = 0 ក្រែងលោចង់ស្រោចស្រង់ user ដែលលុបចោលមកវិញ
 
       res.json({ success: true });
     } catch (err: any) {
@@ -185,8 +203,8 @@ async function startServer() {
       db.prepare(
         `
         INSERT OR REPLACE INTO users
-        (userId, phoneNumber, expiredAt, geminiApiKey, plan)
-        VALUES (?, ?, ?, ?, ?)
+        (userId, phoneNumber, expiredAt, geminiApiKey, plan, deleted)
+        VALUES (?, ?, ?, ?, ?, 0)
         `
       ).run(
         userId,
@@ -257,9 +275,9 @@ async function startServer() {
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
 
-    // ទាញយកទិន្នន័យ User ពី Database សម្រាប់ WebSocket Connection
+    // ទាញយកទិន្នន័យ User ពី Database សម្រាប់ WebSocket Connection (ចំណុចទី ៤៖ បន្ថែម AND deleted != 1)
     try {
-      const user = db.prepare("SELECT * FROM users WHERE userId = ?").get(userId) as any;
+      const user = db.prepare("SELECT * FROM users WHERE userId = ? AND deleted != 1").get(userId) as any;
 
       const isExpired = user ? new Date(user.expiredAt).getTime() < Date.now() : true;
 
