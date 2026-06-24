@@ -89,7 +89,6 @@
             .catch(err => alert("មានបញ្ហាការតភ្ជាប់ទៅកាន់ Server៖ " + err));
         }
 
-        // បានកែប្រែអនុគមន៍ loadUsers() តាមការណែនាំរបស់អ្នក
         function loadUsers() {
             const password = document.getElementById('password').value;
 
@@ -102,7 +101,6 @@
             .then(data => {
                 if(data.error) { alert(data.error); return; }
                 
-                // បន្ថែមបន្ទាត់នេះ ដើម្បីបង្ហាញ API Key ទៅលើចំណងជើង UI
                 if(document.getElementById("default-key")){
                     document.getElementById("default-key").innerText = " (" + (data.envApiKey || 'No Default Key') + ")";
                 }
@@ -223,8 +221,8 @@
         }
 
         function editApiKey(userId){
-            const newKey = prompt("បញ្ចូល API Key ថ្មី");
-            if(!newKey) return;
+            const newKey = prompt("បញ្ចូល Gemini API Key ថ្មីសម្រាប់ User នេះ (ឬទុកទទេ រួចចុច OK ដើម្បីលុបចេញ ហើយត្រឡប់ទៅប្រើ ENV DEFAULT KEY វិញ)៖");
+            if (newKey === null) return; 
 
             const password = document.getElementById("password").value;
 
@@ -236,12 +234,16 @@
                 body:JSON.stringify({
                     password,
                     userId,
-                    geminiApiKey: newKey
+                    geminiApiKey: newKey.trim() || null
                 })
             })
             .then(r=>r.json())
             .then(data => {
-                if(data.error) alert(data.error);
+                if(data.error) {
+                    alert(data.error);
+                } else {
+                    alert("បានកែប្រែ API Key ជោគជ័យ!");
+                }
                 loadUsers();
             })
             .catch(() => loadUsers());

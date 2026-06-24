@@ -82,7 +82,7 @@ async function startServer() {
   });
 
   // ====================================================
-  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (កែប្រែទៅជា POST /api/admin/users)
+  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (កែប្រែថ្មីដើម្បីបង្ហាញ Env Key)
   // ====================================================
   app.post("/api/admin/users", (req, res) => {
     const { password } = req.body;
@@ -100,6 +100,11 @@ async function startServer() {
 
       const expiredUsers = rows.length - activeUsers;
 
+      // ទាញយក Env Key មកកាត់ខ្លីសម្រាប់បង្ហាញ បើគ្មាន User Key
+      const envKeyShort = process.env.GEMINI_API_KEY 
+        ? process.env.GEMINI_API_KEY.substring(0, 15) + "..." 
+        : "MISSING ENV KEY";
+
       res.json({
         success: true,
         totalUsers: rows.length,
@@ -107,11 +112,11 @@ async function startServer() {
         expiredUsers,
         users: rows.map(u => ({
           ...u,
+          // បើមាន Key ផ្ទាល់ខ្លួន បង្ហាញ Key ខ្លួនឯង បើអត់ទេ បង្ហាញ Key រួមរបស់ Server
           apiDisplay: u.geminiApiKey
             ? u.geminiApiKey.substring(0, 20) + "..."
-            : "ENV DEFAULT KEY"
+            : `ENV (${envKeyShort})`
         })),
-        // បន្ថែម envApiKey ផ្ញើទៅកាន់ Frontend ដូចការស្នើសុំ
         envApiKey: process.env.GEMINI_API_KEY || "មិនទាន់មាន Key ក្នុង .env ទេ"
       });
     } catch (err: any) {
@@ -173,7 +178,7 @@ async function startServer() {
 
       db.prepare(
         "UPDATE users SET expiredAt = ?, deleted = 0 WHERE userId = ?"
-      ).run(expiredAt, userId); // បន្ថែម deleted = 0 ក្រែងលោចង់ស្រោចស្រង់ user ដែលលុបចោលមកវិញ
+      ).run(expiredAt, userId);
 
       res.json({ success: true });
     } catch (err: any) {
@@ -241,6 +246,27 @@ async function startServer() {
       ).run(plan, userId);
 
       res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ====================================================
+  // API ថ្មី៖ សម្រាប់ទទួលការកែប្រែ API Key ផ្ទាល់ខ្លួនរបស់ User (ប៊ូតុងខ្មៅដៃ)
+  // ====================================================
+  app.post("/api/admin/update-api-key", (req, res) => {
+    const { password, userId, geminiApiKey } = req.body;
+
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: "Password មិនត្រឹមត្រូវ" });
+    }
+
+    try {
+      db.prepare(
+        "UPDATE users SET geminiApiKey = ? WHERE userId = ?"
+      ).run(geminiApiKey || null, userId);
+
+      res.json({ success: true, message: "ធ្វើបច្ចុប្បន្នភាព API Key ជោគជ័យ" });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
