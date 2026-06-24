@@ -135,6 +135,9 @@
                         const statusText = active ? "Active" : "Expired";
                         const statusColor = active ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30";
 
+                        // កំណត់ពណ៌អក្សរសម្រាប់ Key (ពណ៌ខៀវបើជា ENV DEFAULT KEY, ពណ៌លឿងបើជា Key ផ្ទាល់ខ្លួន)
+                        const keyColorClass = user.geminiApiKey ? "text-amber-400 font-mono" : "text-cyan-400 font-bold font-mono";
+
                         html += `
                         <div class="bg-white/5 border border-white/10 p-3.5 rounded-xl space-y-2">
                             <div class="flex justify-between items-center">
@@ -148,7 +151,7 @@
                                 <div class="truncate flex items-center gap-1"><span class="text-slate-500">API:</span> 
                                     <div class="flex items-center gap-2">
                                         <button onclick="editApiKey('${user.userId}')" class="bg-blue-600 px-2 py-1 rounded text-[10px]">✏️</button>
-                                        <span class="font-mono text-slate-400">${user.apiDisplay}</span>
+                                        <span class="${keyColorClass}">${user.apiDisplay}</span>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1">

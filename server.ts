@@ -82,7 +82,7 @@ async function startServer() {
   });
 
   // ====================================================
-  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (កែប្រែថ្មីដើម្បីបង្ហាញ Env Key)
+  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (កែប្រែថ្មីដើម្បីបង្ហាញ ENV DEFAULT KEY)
   // ====================================================
   app.post("/api/admin/users", (req, res) => {
     const { password } = req.body;
@@ -100,11 +100,6 @@ async function startServer() {
 
       const expiredUsers = rows.length - activeUsers;
 
-      // ទាញយក Env Key មកកាត់ខ្លីសម្រាប់បង្ហាញ បើគ្មាន User Key
-      const envKeyShort = process.env.GEMINI_API_KEY 
-        ? process.env.GEMINI_API_KEY.substring(0, 15) + "..." 
-        : "MISSING ENV KEY";
-
       res.json({
         success: true,
         totalUsers: rows.length,
@@ -112,10 +107,10 @@ async function startServer() {
         expiredUsers,
         users: rows.map(u => ({
           ...u,
-          // បើមាន Key ផ្ទាល់ខ្លួន បង្ហាញ Key ខ្លួនឯង បើអត់ទេ បង្ហាញ Key រួមរបស់ Server
+          // បើមាន Key ផ្ទាល់ខ្លួន បង្ហាញ Key ខ្លួនឯង បើអត់ទេ បង្ហាញពាក្យ ENV DEFAULT KEY
           apiDisplay: u.geminiApiKey
             ? u.geminiApiKey.substring(0, 20) + "..."
-            : `ENV (${envKeyShort})`
+            : "ENV DEFAULT KEY"
         })),
         envApiKey: process.env.GEMINI_API_KEY || "មិនទាន់មាន Key ក្នុង .env ទេ"
       });
