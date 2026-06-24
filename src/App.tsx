@@ -565,7 +565,7 @@ export default function App() {
               </div>
             </div>
 
-            <p className="text-[11px] text-center text-slate-400 max-w-[260px] leading-relaxed mt-3">
+            <p className="text-[11px] text-slate-400 max-w-[260px] leading-relaxed mt-3">
               {restarting
                 ? "កំពុងអនុវត្តភាសាថ្មី..."
                 : connected 
@@ -810,7 +810,7 @@ export default function App() {
                 </div>
 
                 <p className="text-[10px] text-slate-400 mb-4 leading-tight">
-                  សូមថតអេក្រង់ (Screenshot) ឬរក្សារូបភាព QR ខាងលើ ដើម្បីយកទៅស្កេនទូទាត់ប្រាក់នៅក្នុង App ធនាគាររបស់អ្នក។
+                  សូមថតQRនេះ ដើម្បីយកទៅស្កេនទូទាត់ប្រាក់នៅក្នុង App ធនាគាររបស់អ្នករួចផ្ញើមកTelegram។
                 </p>
 
                 <div className="flex gap-2">
@@ -821,10 +821,15 @@ export default function App() {
                     ប្តូរកញ្ចប់
                   </button>
                   <button 
-                    onClick={() => setPayStep(4)} 
+                    onClick={() => {
+                      // បង្កើតសារអត្ថបទអូតូដើម្បីផ្ញើទៅកាន់ Telegram
+                      const message = encodeURIComponent(`សួស្ដីបង! ខ្ញុំបានបង់ប្រាក់លើកញ្ចប់ ${selectedPlan.name} (${selectedPlan.price}) រួចរាល់ហើយ។\n\nID ម៉ាស៊ីនរបស់ខ្ញុំ៖ ${userId}\n\n[សូមភ្ជាប់រូបភាពវិក័យប័ត្រនៅទីនេះ]`);
+                      // បើកលីង្ក Telegram ទៅកាន់ username របស់អ្នក (ឧទាហរណ៍៖ t.me/your_username)
+                      window.open(`https://t.me/hengheng56?text=${message}`, '_blank');
+                    }} 
                     className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
                   >
-                    ខ្ញុំបានបង់ប្រាក់រួចហើយ
+                    ចុចផ្ញើវិក័យប័ត្របង់ប្រាក់ទៅTelegram
                   </button>
                 </div>
               </div>

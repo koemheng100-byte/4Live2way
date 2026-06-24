@@ -5,26 +5,22 @@ import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import { GoogleGenAI, Modality } from "@google/genai";
 
-// 1. បង្កើត In-Memory Database សម្រាប់ផ្ទុកទិន្នន័យ User ( ID, លេខទូរសព្ទ, ថ្ងៃផុតកំណត់, និង API Key ផ្ទាល់ខ្លួន )
 interface UserSubscription {
   userId: string;
   phoneNumber?: string;
-  expiredAt: string; // ISO String format
-  geminiApiKey?: string; // API Key ជាក់លាក់សម្រាប់ ID នេះ (បើគ្មានគឺប្រើ Key រួមក្នុង .env)
+  expiredAt: string;
+  geminiApiKey?: string;
 }
 
-// ទិន្នន័យគំរូ និងផ្ទុកបណ្តោះអាសន្នលើ Server
 const userDatabase: Record<string, UserSubscription> = {};
 
 async function startServer() {
   const app = express();
-  app.use(express.json()); // អនុញ្ញាតឱ្យទទួល JSON body
+  app.use(express.json());
 
   const PORT = Number(process.env.PORT) || 3000;
 
   console.log("Default Environment API KEY:", process.env.GEMINI_API_KEY ? "FOUND" : "MISSING");
-
-  // --- API ROUTES ថ្មីសម្រាប់ប្រព័ន្ធគ្រប់គ្រងការបង់ប្រាក់ និង API KEY ---
 
   // API សម្រាប់ Client ឆែកស្ថានភាព ID របស់ខ្លួន
   app.get("/api/check-status/:userId", (req, res) => {
@@ -49,10 +45,9 @@ async function startServer() {
     if (!userId) return res.status(400).json({ error: "Missing userId" });
 
     if (!userDatabase[userId]) {
-      // បង្កើត profile ថ្មីបើមិនទាន់មាន (ករណីទើបបង់ប្រាក់)
       userDatabase[userId] = {
         userId,
-        expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // default 1 ថ្ងៃសាកល្បង
+        expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       };
     }
 
@@ -60,12 +55,27 @@ async function startServer() {
     res.json({ success: true, message: "រក្សាទុកលេខទូរស័ព្ទជោគជ័យ" });
   });
 
-  // API ពិសេសសម្រាប់អ្នក (Admin) កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID ណាៗតាមចិត្ត
-  // របៀបប្រើ៖ ផ្ញើ POST ទៅកាន់ https://fourlive2way.onrender.com/api/admin/set-user 
+  // ====================================================
+  // API ថ្មី៖ សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល
+  // ====================================================
+  app.get("/api/users", (req, res) => {
+    const { password } = req.query;
+
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: "Password មិនត្រឹមត្រូវទេ!" });
+    }
+
+    res.json({
+      success: true,
+      count: Object.keys(userDatabase).length,
+      users: Object.values(userDatabase)
+    });
+  });
+
+  // API ពិសេសសម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID
   app.post("/api/admin/set-user", (req, res) => {
     const { password, userId, days, geminiApiKey } = req.body;
 
-    // ការពារសុវត្ថិភាពដោយប្រើ password ក្នុង .env
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ error: "Password មិនត្រឹមត្រូវទេ!" });
     }
@@ -80,7 +90,7 @@ async function startServer() {
       ...userDatabase[userId],
       userId,
       expiredAt: expiredDate.toISOString(),
-      geminiApiKey: geminiApiKey || undefined // បើមិនដាក់ទេ វានឹងប្រើ Key រួមក្នុង .env
+      geminiApiKey: geminiApiKey || undefined
     };
 
     res.json({
@@ -90,7 +100,14 @@ async function startServer() {
     });
   });
 
-  // -------------------------------------------------------------
+  // បម្រើឯកសារ admin.html
+  app.get('/admin.html', (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+      res.sendFile(path.join(process.cwd(), 'dist', 'admin.html'));
+    } else {
+      res.sendFile(path.join(process.cwd(), 'admin.html'));
+    }
+  });
 
   if (process.env.NODE_ENV === "production") {
     const distPath = path.join(process.cwd(), 'dist');
@@ -118,7 +135,6 @@ async function startServer() {
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
 
-    // ត្រួតពិនិត្យការទូទាត់ និងសុពលភាពថ្ងៃផុតកំណត់នៅលើ Server មុននឹងឱ្យតភ្ជាប់ទៅ Gemini
     const user = userDatabase[userId];
     const isExpired = user ? new Date(user.expiredAt).getTime() < Date.now() : true;
 
@@ -129,7 +145,6 @@ async function startServer() {
       return;
     }
 
-    // ពិនិត្យលក្ខខណ្ឌ Gemini API Key: បើមាន Key ផ្ទាល់ខ្លួនរបស់ ID នោះ គឺយកមកប្រើ បើគ្មានទេទើបប្រើ Key រួមនៅក្នុង .env
     const activeApiKey = user?.geminiApiKey || process.env.GEMINI_API_KEY;
 
     if (!activeApiKey) {
