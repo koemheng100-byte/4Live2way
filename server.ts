@@ -125,6 +125,11 @@ async function startServer() {
     }
   });
 
+  // បន្ថែម Route សម្រាប់ Admin Page នៅត្រង់នេះ
+  app.get("/admin.html", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "public", "admin.html"));
+  });
+
   if (process.env.NODE_ENV === "production") {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
