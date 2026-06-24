@@ -66,7 +66,7 @@ async function startServer() {
   });
 
   // ====================================================
-  // API ថ្មី៖ សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល
+  // API ថ្មី៖ សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (បានកែសម្រួល)
   // ====================================================
   app.get("/api/users", (req, res) => {
     const { password } = req.query;
@@ -78,10 +78,24 @@ async function startServer() {
     try {
       const rows = db.prepare("SELECT * FROM users").all() as any[];
 
+      const activeUsers = rows.filter(
+        u => new Date(u.expiredAt).getTime() > Date.now()
+      ).length;
+
+      const expiredUsers = rows.length - activeUsers;
+
       res.json({
         success: true,
-        count: rows.length,
-        users: rows
+        totalUsers: rows.length,
+        activeUsers,
+        expiredUsers,
+        users: rows.map(u => ({
+          ...u,
+          plan:
+            u.expiredAt
+              ? "Custom"
+              : "Unknown"
+        }))
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
