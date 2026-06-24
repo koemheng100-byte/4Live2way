@@ -18,32 +18,28 @@ async function startServer() {
   app.get("/api/check-status/:userId", (req, res) => {
     const { userId } = req.params;
 
-    db.get(
-      "SELECT * FROM users WHERE userId = ?",
-      [userId],
-      (err, user: any) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
+    try {
+      const user = db.prepare("SELECT * FROM users WHERE userId = ?").get(userId) as any;
 
-        if (!user) {
-          return res.json({
-            active: false,
-            expiredAt: null,
-            phoneNumber: ""
-          });
-        }
-
-        const isExpired =
-          new Date(user.expiredAt).getTime() < Date.now();
-
-        res.json({
-          active: !isExpired,
-          expiredAt: user.expiredAt,
-          phoneNumber: user.phoneNumber || ""
+      if (!user) {
+        return res.json({
+          active: false,
+          expiredAt: null,
+          phoneNumber: ""
         });
       }
-    );
+
+      const isExpired =
+        new Date(user.expiredAt).getTime() < Date.now();
+
+      res.json({
+        active: !isExpired,
+        expiredAt: user.expiredAt,
+        phoneNumber: user.phoneNumber || ""
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // API សម្រាប់ឱ្យ Client ផ្ញើលេខទូរស័ព្ទមក Save ភ្ជាប់ជាមួយ ID
@@ -51,22 +47,21 @@ async function startServer() {
     const { userId, phoneNumber } = req.body;
     if (!userId) return res.status(400).json({ error: "Missing userId" });
 
-    // ឆែកមើលថាតើមាន User រួចហើយឬនៅ ដើម្បីរក្សាថ្ងៃផុតកំណត់ចាស់ បើគ្មានទេបង្កើតថ្មីឱ្យ ២៤ម៉ោង
-    db.get("SELECT * FROM users WHERE userId = ?", [userId], (err, user: any) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      // ឆែកមើលថាតើមាន User រួចហើយឬនៅ ដើម្បីរក្សាថ្ងៃផុតកំណត់ចាស់ បើគ្មានទេបង្កើតថ្មីឱ្យ ២៤ម៉ោង
+      const user = db.prepare("SELECT * FROM users WHERE userId = ?").get(userId) as any;
 
       const expiredAt = user ? user.expiredAt : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       const geminiApiKey = user ? user.geminiApiKey : null;
 
-      db.run(
-        `INSERT OR REPLACE INTO users (userId, phoneNumber, expiredAt, geminiApiKey) VALUES (?, ?, ?, ?)`,
-        [userId, phoneNumber, expiredAt, geminiApiKey],
-        (err) => {
-          if (err) return res.status(500).json({ error: err.message });
-          res.json({ success: true, message: "រក្សាទុកលេខទូរស័ព្ទជោគជ័យ" });
-        }
-      );
-    });
+      db.prepare(
+        `INSERT OR REPLACE INTO users (userId, phoneNumber, expiredAt, geminiApiKey) VALUES (?, ?, ?, ?)`
+      ).run(userId, phoneNumber, expiredAt, geminiApiKey);
+
+      res.json({ success: true, message: "រក្សាទុកលេខទូរស័ព្ទជោគជ័យ" });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // ====================================================
@@ -79,21 +74,17 @@ async function startServer() {
       return res.status(401).json({ error: "Password មិនត្រឹមត្រូវទេ!" });
     }
 
-    db.all(
-      "SELECT * FROM users",
-      [],
-      (err, rows) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
+    try {
+      const rows = db.prepare("SELECT * FROM users").all() as any[];
 
-        res.json({
-          success: true,
-          count: rows.length,
-          users: rows
-        });
-      }
-    );
+      res.json({
+        success: true,
+        count: rows.length,
+        users: rows
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // API ពិសេសសម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID
@@ -110,29 +101,27 @@ async function startServer() {
 
     const expiredDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
-    db.run(
-      `
-      INSERT OR REPLACE INTO users
-      (userId, phoneNumber, expiredAt, geminiApiKey)
-      VALUES (?, ?, ?, ?)
-      `,
-      [
+    try {
+      db.prepare(
+        `
+        INSERT OR REPLACE INTO users
+        (userId, phoneNumber, expiredAt, geminiApiKey)
+        VALUES (?, ?, ?, ?)
+        `
+      ).run(
         userId,
         "",
         expiredDate.toISOString(),
         geminiApiKey || null
-      ],
-      (err) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
+      );
 
-        res.json({
-          success: true,
-          message: `បានកំណត់ ID ${userId} ជោគជ័យ`
-        });
-      }
-    );
+      res.json({
+        success: true,
+        message: `បានកំណត់ ID ${userId} ជោគជ័យ`
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // បម្រើឯកសារ admin.html
@@ -171,12 +160,8 @@ async function startServer() {
     const userId = url.searchParams.get("userId") || "";
 
     // ទាញយកទិន្នន័យ User ពី Database សម្រាប់ WebSocket Connection
-    db.get("SELECT * FROM users WHERE userId = ?", [userId], async (err, user: any) => {
-      if (err) {
-        clientWs.send(JSON.stringify({ error: "Database error occurred." }));
-        clientWs.close();
-        return;
-      }
+    try {
+      const user = db.prepare("SELECT * FROM users WHERE userId = ?").get(userId) as any;
 
       const isExpired = user ? new Date(user.expiredAt).getTime() < Date.now() : true;
 
@@ -283,7 +268,11 @@ Translation rules:
         }
         console.log(`Client session ended for ${userId}`);
       });
-    });
+    } catch (err) {
+      clientWs.send(JSON.stringify({ error: "Database error occurred." }));
+      clientWs.close();
+      return;
+    }
   });
 }
 

@@ -1,15 +1,13 @@
-import sqlite3 from "sqlite3";
+import Database from "better-sqlite3";
 
-// បានប្តូរពី "./users.db" ទៅជា "./database.sqlite"
-export const db = new sqlite3.Database("./database.sqlite");
+export const db = new Database("users.db");
 
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      userId TEXT PRIMARY KEY,
-      phoneNumber TEXT,
-      expiredAt TEXT,
-      geminiApiKey TEXT
-    )
-  `);
-});
+// បង្កើត Table users ផ្អែកលើ better-sqlite3
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    userId TEXT PRIMARY KEY,
+    phoneNumber TEXT,
+    expiredAt TEXT,
+    geminiApiKey TEXT
+  )
+`);
