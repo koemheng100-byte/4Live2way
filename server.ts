@@ -9,6 +9,7 @@ import { db } from "./db";
 async function startServer() {
   const app = express();
   app.use(express.json());
+  app.use(express.static("public"));
 
   const PORT = Number(process.env.PORT) || 3000;
 
@@ -121,15 +122,6 @@ async function startServer() {
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
-    }
-  });
-
-  // បម្រើឯកសារ admin.html
-  app.get('/admin.html', (req, res) => {
-    if (process.env.NODE_ENV === "production") {
-      res.sendFile(path.join(process.cwd(), 'dist', 'admin.html'));
-    } else {
-      res.sendFile(path.join(process.cwd(), 'admin.html'));
     }
   });
 
