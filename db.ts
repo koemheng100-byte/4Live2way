@@ -1,6 +1,7 @@
 import sqlite3 from "sqlite3";
 
-export const db = new sqlite3.Database("./users.db");
+// បានប្តូរពី "./users.db" ទៅជា "./database.sqlite"
+export const db = new sqlite3.Database("./database.sqlite");
 
 db.serialize(() => {
   db.run(`

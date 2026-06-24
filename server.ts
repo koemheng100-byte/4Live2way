@@ -104,7 +104,7 @@ async function startServer() {
       return res.status(401).json({ error: "Password មិនត្រឹមត្រូវទេ!" });
     }
 
-    if (!userId || !days) {
+    if (!userId || days === undefined) {
       return res.status(400).json({ error: "សូមបំពេញ userId និង days ឱ្យបានត្រឹមត្រូវ" });
     }
 
