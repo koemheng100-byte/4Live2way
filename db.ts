@@ -12,3 +12,10 @@ db.exec(`
     plan TEXT DEFAULT '30 Days'
   )
 `);
+
+try {
+  db.exec(`
+    ALTER TABLE users
+    ADD COLUMN plan TEXT DEFAULT '30 Days'
+  `);
+} catch {}
