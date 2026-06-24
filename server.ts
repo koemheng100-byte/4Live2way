@@ -15,13 +15,12 @@ async function startServer() {
 
   console.log("Default Environment API KEY:", process.env.GEMINI_API_KEY ? "FOUND" : "MISSING");
 
-  // API សម្រាប់ Client ឆែកស្ថានភាព ID របស់ខ្លួន (កែប្រែតាមចំណុចទី ២)
+  // ១. API សម្រាប់ Client ឆែកស្ថានភាព ID របស់ខ្លួន
   app.get("/api/check-status/:userId", async (req, res) => {
     const { userId } = req.params;
 
     try {
-      // 🔗 កូដថ្មីសម្រាប់ទាញទិន្នន័យពី Neon
-      const result = await pool.query("SELECT * FROM users WHERE userId = $1 AND deleted != 1", [userId]);
+      const result = await pool.query("SELECT * FROM users WHERE userid = $1 AND deleted != 1", [userId]);
       const user = result.rows[0];
 
       if (!user) {
@@ -32,7 +31,7 @@ async function startServer() {
         });
       }
 
-      const isExpired = new Date() > new Date(user.expiredat); // ⚠️ ចំណាំ៖ pg នឹងប្ដូរឈ្មោះ column ទៅជាអក្សរតូច (expiredat)
+      const isExpired = new Date() > new Date(user.expiredat);
 
       res.json({
         active: !isExpired,
@@ -44,13 +43,13 @@ async function startServer() {
     }
   });
 
-  // API សម្រាប់ឱ្យ Client ផ្ញើលេខទូរស័ព្ទមក Save ភ្ជាប់ជាមួយ ID (រក្សាទុក Logic ដើមដោយប្តូរទៅប្រើ pool ស្របតាមទម្រង់ទិន្នន័យអក្សរតូចរបស់ pg)
+  // ២. API សម្រាប់ឱ្យ Client ផ្ញើលេខទូរស័ព្ទមក Save ភ្ជាប់ជាមួយ ID
   app.post("/api/save-phone", async (req, res) => {
     const { userId, phoneNumber } = req.body;
     if (!userId) return res.status(400).json({ error: "Missing userId" });
 
     try {
-      const result = await pool.query("SELECT * FROM users WHERE userId = $1 AND deleted != 1", [userId]);
+      const result = await pool.query("SELECT * FROM users WHERE userid = $1 AND deleted != 1", [userId]);
       const user = result.rows[0];
 
       if (!user) {
@@ -61,8 +60,8 @@ async function startServer() {
 
       await pool.query(`
         UPDATE users
-        SET phoneNumber = $1
-        WHERE userId = $2
+        SET phonenumber = $1
+        WHERE userid = $2
       `, [phoneNumber, userId]);
 
       res.json({ success: true, message: "រក្សាទុកលេខទូរស័ព្ទជោគជ័យ" });
@@ -71,7 +70,7 @@ async function startServer() {
     }
   });
 
-  // API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល (កែប្រែតាមចំណុចទី ៥ និងរក្សាការគណនាស្ថិតិដើម)
+  // ៣. API សម្រាប់ឱ្យ Admin ទាញយកទិន្នន័យ User ទាំងអស់មកមើល និងគណនាស្ថិតិ
   app.post("/api/admin/users", async (req, res) => {
     const { password } = req.body;
 
@@ -80,12 +79,11 @@ async function startServer() {
     }
 
     try {
-      // 🔗 កូដថ្មី
-      const result = await pool.query("SELECT * FROM users ORDER BY expiredAt DESC");
+      const result = await pool.query("SELECT * FROM users ORDER BY expiredat DESC");
       const rows = result.rows;
 
       const activeUsers = rows.filter(
-        u => new Date(u.expiredat || u.expiredAt).getTime() > Date.now()
+        u => new Date(u.expiredat).getTime() > Date.now()
       ).length;
 
       const expiredUsers = rows.length - activeUsers;
@@ -96,14 +94,14 @@ async function startServer() {
         activeUsers,
         expiredUsers,
         users: rows.map(u => ({
-          userId: u.userid || u.userId,
-          phoneNumber: u.phonenumber || u.phoneNumber,
-          expiredAt: u.expiredat || u.expiredAt,
-          geminiApiKey: u.geminiapikey || u.geminiApiKey,
+          userId: u.userid,
+          phoneNumber: u.phonenumber,
+          expiredAt: u.expiredat,
+          geminiApiKey: u.geminiapikey,
           plan: u.plan,
           deleted: u.deleted,
-          apiDisplay: (u.geminiapikey || u.geminiApiKey)
-            ? (u.geminiapikey || u.geminiApiKey).substring(0, 20) + "..."
+          apiDisplay: u.geminiapikey
+            ? u.geminiapikey.substring(0, 20) + "..."
             : "ENV DEFAULT KEY"
         })),
         envApiKey: process.env.GEMINI_API_KEY || "មិនទាន់មាន Key ក្នុង .env ទេ"
@@ -113,7 +111,7 @@ async function startServer() {
     }
   });
 
-  // API សម្រាប់ Admin លុប User (កែប្រែតាមចំណុចទី ៤ - លុបដាច់)
+  // ៤. API សម្រាប់ Admin លុប User (លុបដាច់)
   app.post("/api/admin/delete-user", async (req, res) => {
     const { password, userId } = req.body;
 
@@ -122,15 +120,14 @@ async function startServer() {
     }
 
     try {
-      // 🔗 កូដថ្មី៖ លុបដាច់ចេញពី Neon Cloud Database តែម្តង លែងឱ្យមានឈ្មោះទៀតហើយ
-      await pool.query("DELETE FROM users WHERE userId = $1", [userId]);
+      await pool.query("DELETE FROM users WHERE userid = $1", [userId]);
       res.json({ success: true, message: "បានលុប User នេះដាច់ដោយជោគជ័យ!" });
     } catch (err) {
       res.status(500).json({ error: "មិនអាចលុបបានទេ!" });
     }
   });
 
-  // API សម្រាប់ Admin ផ្អាកការប្រើប្រាស់របស់ User (កែប្រែទៅប្រើ pool)
+  // ៥. API សម្រាប់ Admin ផ្អាកការប្រើប្រាស់របស់ User
   app.post("/api/admin/suspend-user", async (req, res) => {
     const { password, userId } = req.body;
 
@@ -140,7 +137,7 @@ async function startServer() {
 
     try {
       await pool.query(
-        "UPDATE users SET expiredAt = $1 WHERE userId = $2",
+        "UPDATE users SET expiredat = $1 WHERE userid = $2",
         [new Date(0).toISOString(), userId]
       );
       res.json({ success: true });
@@ -149,7 +146,7 @@ async function startServer() {
     }
   });
 
-  // API សម្រាប់ Admin បើកដំណើរការ User ឡើងវិញ (Reactivate) (កែប្រែទៅប្រើ pool)
+  // ៦. API សម្រាប់ Admin បើកដំណើរការ User ឡើងវិញ (Reactivate)
   app.post("/api/admin/reactivate-user", async (req, res) => {
     const { password, userId, days, plan } = req.body;
 
@@ -163,7 +160,7 @@ async function startServer() {
       ).toISOString();
 
       await pool.query(
-        "UPDATE users SET expiredAt = $1, plan = $2, deleted = 0 WHERE userId = $3",
+        "UPDATE users SET expiredat = $1, plan = $2, deleted = 0 WHERE userid = $3",
         [expiredAt, plan || "30 Days", userId]
       );
 
@@ -173,7 +170,7 @@ async function startServer() {
     }
   });
 
-  // API ពិសេសសម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID (កែប្រែតាមចំណុចទី ៣ - ON CONFLICT)
+  // ៧. API សម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID (ON CONFLICT)
   app.post("/api/admin/set-user", async (req, res) => {
     const { password, userId, days, plan, geminiApiKey } = req.body;
 
@@ -186,14 +183,13 @@ async function startServer() {
     expiredDate.setDate(expiredDate.getDate() + daysNum);
 
     try {
-      // 🔗 កូដថ្មីសម្រាប់ PostgreSQL (ប្រើ ON CONFLICT ជំនួស INSERT OR REPLACE)
       await pool.query(`
-        INSERT INTO users (userId, phoneNumber, expiredAt, geminiApiKey, plan, deleted)
+        INSERT INTO users (userid, phonenumber, expiredat, geminiapikey, plan, deleted)
         VALUES ($1, $2, $3, $4, $5, 0)
-        ON CONFLICT (userId) 
+        ON CONFLICT (userid) 
         DO UPDATE SET 
-          expiredAt = EXCLUDED.expiredAt,
-          geminiApiKey = EXCLUDED.geminiApiKey,
+          expiredat = EXCLUDED.expiredat,
+          geminiapikey = EXCLUDED.geminiapikey,
           plan = EXCLUDED.plan,
           deleted = 0
       `, [userId, "", expiredDate.toISOString(), geminiApiKey || null, plan || "30 Days"]);
@@ -205,7 +201,7 @@ async function startServer() {
     }
   });
 
-  // API សម្រាប់ Admin ធ្វើបច្ចុប្បន្នភាព Plan របស់ User និងគណនាថ្ងៃ Expire ឡើងវិញ (កែប្រែទៅប្រើ pool)
+  // ៨. API សម្រាប់ Admin ធ្វើបច្ចុប្បន្នភាព Plan របស់ User
   app.post("/api/admin/update-plan", async (req, res) => {
     const { password, userId, plan, days } = req.body;
 
@@ -221,7 +217,7 @@ async function startServer() {
       ).toISOString();
 
       await pool.query(
-        "UPDATE users SET plan = $1, expiredAt = $2 WHERE userId = $3",
+        "UPDATE users SET plan = $1, expiredat = $2 WHERE userid = $3",
         [plan, newExpiredAt, userId]
       );
 
@@ -231,7 +227,7 @@ async function startServer() {
     }
   });
 
-  // API សម្រាប់ទទួលការកែប្រែ API Key ផ្ទាល់ខ្លួនរបស់ User (ប៊ូតុងខ្មៅដៃ) (កែប្រែទៅប្រើ pool)
+  // ៩. API សម្រាប់ទទួលការកែប្រែ API Key ផ្ទាល់ខ្លួនរបស់ User
   app.post("/api/admin/update-api-key", async (req, res) => {
     const { password, userId, geminiApiKey } = req.body;
 
@@ -241,7 +237,7 @@ async function startServer() {
 
     try {
       await pool.query(
-        "UPDATE users SET geminiApiKey = $1 WHERE userId = $2",
+        "UPDATE users SET geminiapikey = $1 WHERE userid = $2",
         [geminiApiKey || null, userId]
       );
 
@@ -282,9 +278,8 @@ async function startServer() {
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
 
-    // 🔗 កូដថ្មីនៅក្នុង WebSocket (កែប្រែតាមចំណុចទី ៦)
     try {
-      const result = await pool.query("SELECT * FROM users WHERE userId = $1 AND deleted != 1", [userId]);
+      const result = await pool.query("SELECT * FROM users WHERE userid = $1 AND deleted != 1", [userId]);
       const user = result.rows[0];
 
       if (!user) {
