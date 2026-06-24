@@ -226,9 +226,9 @@ async function startServer() {
     }
   });
 
-  // API ថ្មី៖ សម្រាប់ Admin ធ្វើបច្ចុប្បន្នភាព Plan របស់ User
+  // API ថ្មី៖ សម្រាប់ Admin ធ្វើបច្ចុប្បន្នភាព Plan របស់ User និងគណនាថ្ងៃ Expire ឡើងវិញ
   app.post("/api/admin/update-plan", (req, res) => {
-    const { password, userId, plan } = req.body;
+    const { password, userId, plan, days } = req.body; // 🔥 ទទួលយកតម្លៃ days បន្ថែមពី Client
 
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({
@@ -237,9 +237,15 @@ async function startServer() {
     }
 
     try {
+      // 🔥 គណនាថ្ងៃផុតកំណត់ (Expire) ថ្មី ចាប់គិតពីម៉ោងដែល Admin កំពុងចុច Edit នេះទៅ
+      const newExpiredAt = new Date(
+        Date.now() + (days || 30) * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      // 🔥 កែប្រែ SQL ឱ្យ Update ទាំង plan ផង និង expiredAt ថ្មីផង
       db.prepare(
-        "UPDATE users SET plan = ? WHERE userId = ?"
-      ).run(plan, userId);
+        "UPDATE users SET plan = ?, expiredAt = ? WHERE userId = ?"
+      ).run(plan, newExpiredAt, userId);
 
       res.json({ success: true });
     } catch (err: any) {

@@ -261,23 +261,49 @@
         }
 
         function editPlan(userId){
-            const plan = prompt("1 Days / 1Week / 1Month");
+            const plan = prompt("សូមវាយបញ្ចូល Plan (ឧទាហរណ៍៖ 1 Days, 1Week, 30 Days)៖");
             if(!plan) return;
+
+            // គណនាបំប្លែងអក្សរដែល Admin វាយបញ្ចូល ឱ្យទៅជាចំនួនថ្ងៃ (Days) ដើម្បីផ្ញើទៅ Server
+            let days = 30; // តម្លៃលំនាំដើម (Default)
+            const lowerPlan = plan.toLowerCase().trim();
+            
+            if (lowerPlan.includes("1 day") || lowerPlan === "1") {
+                days = 1;
+            } else if (lowerPlan.includes("1week") || lowerPlan.includes("1 week") || lowerPlan === "7") {
+                days = 7;
+            } else if (lowerPlan.includes("30") || lowerPlan.includes("1month") || lowerPlan.includes("1 month")) {
+                days = 30;
+            } else {
+                // បើ Admin វាយបញ្ចូលជាលេខថ្ងៃសុទ្ធ (ឧទាហរណ៍៖ 15)
+                const checkNumber = parseInt(plan);
+                if(!isNaN(checkNumber)) days = checkNumber;
+            }
 
             const password = document.getElementById("password").value;
 
             fetch("/api/admin/update-plan",{
-                method:"POST",
-                headers:{
-                    "Content-Type":"application/json"
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
                 },
-                body:JSON.stringify({
+                body: JSON.stringify({
                     password,
                     userId,
-                    plan
+                    plan,  // ផ្ញើឈ្មោះ Plan ទៅបង្ហាញ (ឧទាហរណ៍៖ "1 Days")
+                    days   // 🔥 បន្ថែមការផ្ញើចំនួនថ្ងៃទៅកាន់ Server ដើម្បីគណនាថ្ងៃ Expire ឡើងវិញ
                 })
             })
-            .then(()=>loadUsers());
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) {
+                    alert("ខុសឆ្គង៖ " + data.error);
+                } else {
+                    alert("បានប្ដូរ Plan និងថ្ងៃ Expired រួចរាល់!");
+                }
+                loadUsers();
+            })
+            .catch(() => loadUsers());
         }
 
         function deleteUser(userId) {
