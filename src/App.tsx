@@ -46,6 +46,9 @@ export default function App() {
   const screenGainNodeRef = useRef<GainNode | null>(null);
   const duckTimeoutRef = useRef<number | null>(null);
 
+  // កែប្រែចំណុចទី ៣៖ បន្ថែម lastTranscriptRef ដើម្បីការពារការស្ទួនទិន្នន័យអត្ថបទ
+  const lastTranscriptRef = useRef("");
+
   // --- STATE បន្ថែមថ្មី សម្រាប់ប្រព័ន្ធគ្រប់គ្រងការបង់ប្រាក់ និង NO-AUTH ID ---
   const [userId, setUserId] = useState<string>("");
   const [isPaid, setIsPaid] = useState<boolean>(true); // សន្មតថាតានដានស្ថានភាពជាមុនសិន
@@ -61,7 +64,7 @@ export default function App() {
   useEffect(() => {
     let localId = localStorage.getItem("user_machine_id");
     if (!localId) {
-      // បង្កើត ID គំរូថ្មីមួយដោយស្វ័យប្រវត្តិ (ឧទាហរណ៍៖ L2W-XXXXXX)
+      // បង្កើត ID គំរូថ្មីមួយដោយស្វ័យប្រវត្តិ (ឧទហរណ៍៖ L2W-XXXXXX)
       localId = "L2W-" + Math.floor(100000 + Math.random() * 900000);
       localStorage.setItem("user_machine_id", localId);
     }
@@ -160,7 +163,11 @@ export default function App() {
   };
 
   const stopTranslation = () => {
+    // កែប្រែចំណុចទី ៤៖ លុបចោល Event Handlers និងបិទ WebSocket ដើម្បីកុំឱ្យវានៅបន្តស្តាប់ពេលឈប់
     if (wsRef.current) {
+      wsRef.current.onmessage = null;
+      wsRef.current.onopen = null;
+      wsRef.current.onclose = null;
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -198,6 +205,12 @@ export default function App() {
       setPayStep(1);
       setShowPayModal(true);
       return;
+    }
+
+    // កែប្រែចំណុចទី ២៖ បិទ WebSocket ចាស់ចោលសិនមុននឹងបង្កើតថ្មី ការពារការជាន់គ្នា
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
     try {
@@ -262,7 +275,8 @@ export default function App() {
       }
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
-      const processor = inputAudioCtx.createScriptProcessor(512, 1, 1);
+      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
+      const processor = inputAudioCtx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
       inputSource.connect(processor);
       processor.connect(inputAudioCtx.destination);
@@ -289,8 +303,12 @@ export default function App() {
         if (msg.audio) {
           playAudioChunk(outputAudioCtx, msg.audio);
         }
-        if (msg.outputTranscript) {
+        
+        // កែប្រែចំណុចទី ៣៖ ការពារការបង្ហាញ Transcript ជាន់គ្នា ឬទិន្នន័យដដែលៗ
+        if (msg.outputTranscript && msg.outputTranscript !== lastTranscriptRef.current) {
+          lastTranscriptRef.current = msg.outputTranscript;
           setLiveSubtitle(msg.outputTranscript);
+          
           if (subtitleTimeoutRef.current) clearTimeout(subtitleTimeoutRef.current);
           subtitleTimeoutRef.current = window.setTimeout(() => setLiveSubtitle(""), 4000);
 
@@ -823,7 +841,7 @@ export default function App() {
                   <button 
                     onClick={() => {
                       // បង្កើតសារអត្ថបទអូតូដើម្បីផ្ញើទៅកាន់ Telegram
-                      const message = encodeURIComponent(`សួស្ដីបង! ខ្ញុំបានបង់ប្រាក់លើកញ្ចប់ ${selectedPlan.name} (${selectedPlan.price}) រួចរាល់ហើយ។\n\nID ម៉ាស៊ីនរបស់ខ្ញុំ៖ ${userId}\n\n[សូមភ្ជាប់រូបភាពវិក័យប័ត្រនៅទីនេះ]`);
+                      const message = encodeURIComponent(`សួស្ដីបង! ខ្ញុំបានបង់ប្រាក់លើកញ្ចប់ ${selectedPlan.name} (${selectedPlan.price}) រួចរាល់ហើយ。\n\nID ម៉ាស៊ីនរបស់ខ្ញុំ៖ ${userId}\n\n[សូមភ្ជាប់រូបភាពវិក័យប័ត្រនៅទីនេះ]`);
                       // បើកលីង្ក Telegram ទៅកាន់ username របស់អ្នក (ឧទាហរណ៍៖ t.me/your_username)
                       window.open(`https://t.me/hengheng56?text=${message}`, '_blank');
                     }} 
