@@ -158,9 +158,9 @@ async function startServer() {
     }
   });
 
-  // API ថ្មី៖ សម្រាប់ Admin បើកដំណើរការ User ឡើងវិញ (Reactivate)
+  // API ថ្មី៖ សម្រាប់ Admin បើកដំណើរការ User ឡើងវិញ (Reactivate) - [កែប្រែរួចរាល់]
   app.post("/api/admin/reactivate-user", (req, res) => {
-    const { password, userId, days } = req.body;
+    const { password, userId, days, plan } = req.body; // 🔥 ទទួលយកតម្លៃ plan ពី client
 
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ error: "Password មិនត្រឹមត្រូវ" });
@@ -171,9 +171,10 @@ async function startServer() {
         Date.now() + (days || 30) * 24 * 60 * 60 * 1000
       ).toISOString();
 
+      // 🔥 កែប្រែ SQL ឱ្យ Update ទាំង expiredAt, plan និង deleted = 0
       db.prepare(
-        "UPDATE users SET expiredAt = ?, deleted = 0 WHERE userId = ?"
-      ).run(expiredAt, userId);
+        "UPDATE users SET expiredAt = ?, plan = ?, deleted = 0 WHERE userId = ?"
+      ).run(expiredAt, plan || "30 Days", userId);
 
       res.json({ success: true });
     } catch (err: any) {

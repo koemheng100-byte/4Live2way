@@ -64,6 +64,9 @@
 
             if(!userId) return alert("សូមបំពេញ User ID របស់ភ្ញៀវ!");
 
+            // បង្កើតអត្ថបទសម្រាប់ Plan ទៅតាមចំនួនថ្ងៃដែល admin ជ្រើសរើស
+            const planText = days === 1 ? "1 Days" : days === 7 ? "1Week" : "30 Days";
+
             fetch('/api/admin/set-user', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -71,6 +74,7 @@
                     password, 
                     userId, 
                     days, 
+                    plan: planText, // 🔥 បន្ថែមការបញ្ជូន plan ទៅកាន់ server ត្រង់នេះ
                     geminiApiKey: geminiApiKey || undefined 
                 })
             })
@@ -205,6 +209,9 @@
 
         function reactivateUser(userId) {
             const password = document.getElementById('password').value;
+            // 🔥 ទាញយកចំនួនថ្ងៃដែល admin កំពុងជ្រើសរើសនៅលើ Select Box ខាងលើ
+            const days = parseInt(document.getElementById('days').value); 
+            const planText = days === 1 ? "1 Days" : days === 7 ? "1Week" : "30 Days";
 
             fetch('/api/admin/reactivate-user', {
                 method: 'POST',
@@ -212,7 +219,8 @@
                 body: JSON.stringify({
                     password,
                     userId,
-                    days: 30
+                    days: days, // 🔥 ប្រើប្រាស់ថ្ងៃតាមការជ្រើសរើស
+                    plan: planText // 🔥 បញ្ជូនតម្លៃ plan ទៅឱ្យ server ដែរ
                 })
             })
             .then(r => r.json())
