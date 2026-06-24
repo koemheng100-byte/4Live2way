@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4LIVE 2WAY - Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#060913] text-white font-sans min-h-screen flex items-center justify-center p-4">
+    <div class="bg-[#111625] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <h2 class="text-xl font-black text-center text-cyan-400 mb-6">ផ្ទាំងគ្រប់គ្រង និងបើកសិទ្ធិ (Admin)</h2>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs text-slate-400 font-bold mb-1 uppercase">Admin Password</label>
+                <input type="password" id="password" value="123456789" class="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-sm focus:outline-none focus:border-cyan-500 font-mono">
+            </div>
+            <div>
+                <label class="block text-xs text-slate-400 font-bold mb-1 uppercase">User ID (ពីភ្ញៀវ)</label>
+                <input type="text" id="userId" placeholder="ឧទាហរណ៍៖ ID-X7R2B9M" class="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-sm focus:outline-none focus:border-cyan-500 font-mono uppercase">
+            </div>
+            <div>
+                <label class="block text-xs text-slate-400 font-bold mb-1 uppercase">រយៈពេល (ចំនួនថ្ងៃ)</label>
+                <select id="days" class="w-full bg-[#111625] border border-white/10 p-2.5 rounded-xl text-sm focus:outline-none focus:border-cyan-500">
+                    <option value="1">1 ថ្ងៃ</option>
+                    <option value="7">7 ថ្ងៃ (1 សប្តាហ៍)</option>
+                    <option value="30" selected>30 ថ្ងៃ (1 ខែ)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-slate-400 font-bold mb-1 uppercase">Gemini API Key (ទុកទទេបើប្រើ Key រួម)</label>
+                <input type="text" id="apiKey" placeholder="AIzaSy..." class="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-sm focus:outline-none focus:border-cyan-500 font-mono">
+            </div>
+            
+            <button onclick="activateUser()" class="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:brightness-110 py-3 rounded-xl font-bold text-sm shadow-lg shadow-cyan-500/20 transition-all active:scale-95 mt-2">
+                បើកសិទ្ធិប្រើប្រាស់ (Activate)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function activateUser() {
+            const password = document.getElementById('password').value;
+            const userId = document.getElementById('userId').value.trim();
+            const days = parseInt(document.getElementById('days').value);
+            const geminiApiKey = document.getElementById('apiKey').value.trim();
+
+            if(!userId) return alert("សូមបំពេញ User ID របស់ភ្ញៀវ!");
+
+            // ផ្ញើទៅកាន់ API /api/admin/set-user ឱ្យត្រូវជាមួយកូដ server.ts របស់អ្នក
+            fetch('/api/admin/set-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    password, 
+                    userId, 
+                    days, 
+                    geminiApiKey: geminiApiKey || undefined 
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) {
+                    alert("បរាជ័យ៖ " + data.error);
+                } else {
+                    alert("ជោគជ័យ៖ បានបើកសិទ្ធិជូន ID " + userId + " រួចរាល់!");
+                    document.getElementById('userId').value = ""; // សំអាតប្រឡោះ ID
+                }
+            })
+            .catch(err => alert("មានបញ្ហាការតភ្ជាប់ទៅកាន់ Server៖ " + err));
+        }
+    </script>
+</body>
+</html>
