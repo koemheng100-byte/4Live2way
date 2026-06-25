@@ -818,8 +818,8 @@ export default function App() {
                 <div className="bg-white p-2 rounded-2xl max-w-[280px] mx-auto mb-3 shadow-md overflow-hidden flex items-center justify-center">
                   <img 
                     src={activeBank === 'aba' 
-                      ? "https://i.postimg.cc/ZKbZMfwm/photo-2026-06-24-00-14-01.jpg" // 👈 រូបភាព QR ABA របស់បង
-                      : "https://i.postimg.cc/FRXXgGY6/photo-2026-06-24-00-38-54.jpg" // 👈 រូបភាព QR Acleda របស់បង
+                      ? "https://i.postimg.cc/T1vZwCDb/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR ABA របស់បង
+                      : "https://i.postimg.cc/T1vZwCDb/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR Acleda របស់បង
                     } 
                     alt="Payment QR Code" 
                     className="w-full h-auto object-contain rounded-xl mx-auto"
