@@ -418,7 +418,7 @@ Translation rules:
       try {
         // === បានកែសម្រួលផ្នែកបង្កើតសេសសិនជាមួយ Gemini Live ទៅតាម SDK ថ្មី ===
         liveSession = await ai.live.connect({
-          model: "gemini-2.0-flash-exp", 
+          model: "gemini-3.1-flash-live-preview", 
           config: {
             responseModalities: [Modality.AUDIO], // 🔥 បង្ខំឱ្យ AI និយាយចេញជាសំឡេងមកវិញ
             outputAudioTranscription: {},
