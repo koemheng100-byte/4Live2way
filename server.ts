@@ -17,28 +17,25 @@ const GEMINI_KEYS_POOL = [
   // ដាក់ Key ផ្សេងទៀតដែលមានចូលក្នុងនេះ...
 ];
 
-let currentKeyIndex = 0;
+// ② ជំនួស getNextGeminiKey() ដោយ getKeyByUser(userId)
+function getKeyByUser(userId: string) {
+  const keys = GEMINI_KEYS_POOL
+    .map(name => process.env[name])
+    .filter(Boolean) as string[];
 
-// 🔥 ជំហានទី ២៖ កែ Function ឱ្យអាន Key ពិតចេញពី Environment (Render / .env)
-function getNextGeminiKey() {
-  if (GEMINI_KEYS_POOL.length === 0) return null;
-  
-  // ១. ទាញយកឈ្មោះ placeholder (ឧ. "GOOGLE_API_KEY_1")
-  const keyName = GEMINI_KEYS_POOL[currentKeyIndex];
-  
-  // ២. ទាញយក Key ពិតចេញពី process.env
-  const activeKey = process.env[keyName];
+  if (keys.length === 0) return [];
 
-  // ៣. វិលជុំ
-  currentKeyIndex = (currentKeyIndex + 1) % GEMINI_KEYS_POOL.length;
-
-  // ៤. ឆែកមើលបើ Key នោះអត់មានក្នុង .env / Render Environment
-  if (!activeKey) {
-    console.error(`Missing Environment Variable for: ${keyName}`);
-    return null;
+  let hash = 0;
+  for (const c of userId) {
+    hash += c.charCodeAt(0);
   }
-  
-  return activeKey;
+
+  const start = hash % keys.length;
+
+  return [
+    ...keys.slice(start),
+    ...keys.slice(0, start)
+  ];
 }
 
 async function startServer() {
@@ -355,23 +352,10 @@ async function startServer() {
         return;
       }
 
-      // 🔥 ជំហានទី ៣៖ ទាញយក Key ( ឥឡូវវានឹង return Key ពិតមក )
-      // ជ្រើសរើស Key: បើ User មាន Key ខ្លួនឯង ប្រើ Key ខ្លួនឯង បើអត់ទេប្រើ Key បង្វិលជុំ (Pool)
-      let apiKeyToUse = user.geminiapikey || getNextGeminiKey();
-
-      if (!apiKeyToUse) {
-        console.error("Connection rejected: No API Key found in server environment.");
-        clientWs.send(JSON.stringify({ error: "Server កំពុងមានបញ្ហា config សោរ Gemini។ សូមព្យាយាមម្តងទៀត។" }));
-        clientWs.close();
-        return;
-      }
-      
-      const ai = new GoogleGenAI({
-        apiKey: apiKeyToUse,
-        httpOptions: {
-          headers: { 'User-Agent': 'aistudio-build' }
-        }
-      });
+      // ③ កន្លែងជ្រើស API Key (កែសម្រួលដើម្បី Fallback ទៅរក Pool Keys បើទោះជា Key ផ្ទាល់ខ្លួនរបស់ User ដើរមិនរួច)
+      const candidateKeys = user.geminiapikey
+        ? [user.geminiapikey, ...getKeyByUser(userId)]
+        : getKeyByUser(userId);
 
       const langNames: Record<string, string> = {
         'km': 'Khmer', 'en': 'English', 'zh': 'Chinese (Mandarin)', 'zh-HK': 'Cantonese',
@@ -415,55 +399,83 @@ Translation rules:
       // ចាប់ផ្ដើម Timer ភ្លាមៗពេលភ្ជាប់
       resetIdleTimeout();
 
-      try {
-        liveSession = await ai.live.connect({
-          model: "gemini-3.1-flash-live-preview",
-          config: {
-            responseModalities: [Modality.AUDIO],
-            outputAudioTranscription: {},
-            inputAudioTranscription: {},
-            systemInstruction,
-          },
-          callbacks: {
-            onmessage: (message: any) => {
-              if (clientWs.readyState !== clientWs.OPEN) return;
+      // ④ កន្លែង ai.live.connect() ដែលប្រើ Loop ដើម្បីព្យាយាមភ្ជាប់ជាមួយ candidateKeys
+      let connected = false;
 
-              const audio = message.serverContent?.modelTurn?.parts
-                ?.find((p: any) => p.inlineData)?.inlineData?.data;
+      for (const key of candidateKeys) {
+        try {
+          // បន្ថែម Log ថាកំពុងប្រើ Key មួយណា
+          console.log(
+            "Trying key:",
+            key.substring(0, 12) + "..."
+          );
 
-              const inputTranscript = message.inputAudioTranscription?.text;
-              const outputTranscript = message.outputAudioTranscription?.text;
-              const interrupted = message.serverContent?.interrupted;
-
-              if (audio || inputTranscript || outputTranscript || interrupted) {
-                clientWs.send(JSON.stringify({ audio, inputTranscript, outputTranscript, interrupted }));
-              }
-            },
-          },
-        });
-
-        clientWs.on("message", (data) => {
-          // 🔥 រាល់ពេល User និយាយ ឬផ្ញើសារមក ឱ្យ reset ពេលវេលា ២ នាទីឡើងវិញ
-          resetIdleTimeout();
-
-          try {
-            const msg = JSON.parse(data.toString());
-            const { audio } = msg;
-            if (audio && liveSession) {
-              liveSession.sendRealtimeInput({
-                audio: { data: audio, mimeType: "audio/pcm;rate=16000" },
-              });
+          const ai = new GoogleGenAI({
+            apiKey: key,
+            httpOptions: {
+              headers: { 'User-Agent': 'aistudio-build' }
             }
-          } catch (err) {
-            console.error("Error piping audio to Gemini:", err);
-          }
-        });
+          });
 
-      } catch (err) {
-        console.error("Gemini Live connection failure:", err);
-        clientWs.send(JSON.stringify({ error: "Gemini session connection failed." }));
-        clientWs.close();
+          liveSession = await ai.live.connect({
+            model: "gemini-3.1-flash-live-preview",
+            config: {
+              responseModalities: [Modality.AUDIO],
+              outputAudioTranscription: {},
+              inputAudioTranscription: {},
+              systemInstruction,
+            },
+            callbacks: {
+              onmessage: (message: any) => {
+                if (clientWs.readyState !== clientWs.OPEN) return;
+
+                const audio = message.serverContent?.modelTurn?.parts
+                  ?.find((p: any) => p.inlineData)?.inlineData?.data;
+
+                const inputTranscript = message.inputAudioTranscription?.text;
+                const outputTranscript = message.outputAudioTranscription?.text;
+                const interrupted = message.serverContent?.interrupted;
+
+                if (audio || inputTranscript || outputTranscript || interrupted) {
+                  clientWs.send(JSON.stringify({ audio, inputTranscript, outputTranscript, interrupted }));
+                }
+              },
+            },
+          });
+
+          connected = true;
+          break;
+
+        } catch (err: any) {
+          // កែសម្រួលមិនឱ្យលាក់ Error ដើម្បីបង្ហាញមូលហេតុពិតនៅលើ Render Log
+          console.error("Key failed:", err?.message || err);
+        }
       }
+
+      if (!connected) {
+        clientWs.send(JSON.stringify({
+          error: "No available Gemini API Key"
+        }));
+        clientWs.close();
+        return;
+      }
+
+      clientWs.on("message", (data) => {
+        // 🔥 រាល់ពេល User និយាយ ឬផ្ញើសារមក ឱ្យ reset ពេលវេលា ២ នាទីឡើងវិញ
+        resetIdleTimeout();
+
+        try {
+          const msg = JSON.parse(data.toString());
+          const { audio } = msg;
+          if (audio && liveSession) {
+            liveSession.sendRealtimeInput({
+              audio: { data: audio, mimeType: "audio/pcm;rate=16000" },
+            });
+          }
+        } catch (err) {
+          console.error("Error piping audio to Gemini:", err);
+        }
+      });
 
       // 🔥 ផ្នែកទី ៣៖ កូដកាត់នាទីរបស់ User (ពេលគាត់បិទកម្មវិធី ឬដាច់លីង)
       clientWs.on("close", async () => {
@@ -487,7 +499,7 @@ Translation rules:
               "UPDATE users SET usedminutes = usedminutes + $1 WHERE userid = $2",
               [sessionMinutes, userId]
             );
-            console.log(`User ${userId} បាននិយាយអស់ ${sessionMinutes.toFixed(2)} នាទី។`);
+            console.log(`User ${userId} បាននិយាយអស់ ${sessionMinutes.toFixed(2)} នាទី。`);
           }
         } catch (err) {
           console.error("Error updating talk minutes:", err);
