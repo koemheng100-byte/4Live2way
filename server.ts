@@ -313,10 +313,8 @@ async function startServer() {
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
 
-    const startTime = Date.now(); // 🔥 គណនាម៉ោងចាប់ផ្ដើមនិយាយ
-
     try {
-      // 🔥 ១. ឆែកមើលទិន្នន័យ User ពី Database
+      // 🔥 ១. ឆែកមើលទិន្នន័យ User ពី Database តែលុបចោលការពិនិត្យ usedminutes ចេញ
       const result = await pool.query("SELECT * FROM users WHERE userid = $1 AND deleted != 1", [userId]);
       const user = result.rows[0];
 
@@ -333,29 +331,7 @@ async function startServer() {
         return;
       }
 
-      // 🔥 ២. ប្រព័ន្ធកំណត់ ៥ ម៉ោង (៣០០ នាទី) ប្រចាំថ្ងៃ
-      const todayStr = new Date().toISOString().split('T')[0]; // ទាញយកថ្ងៃខែថ្ងៃនេះ
-      let currentUsedMinutes = Number(user.usedminutes) || 0;
-
-      // ក. បើចូលដល់ថ្ងៃថ្មី ត្រូវ Reset នាទីឱ្យបាននិយាយ ០ នាទីឡើងវិញដោយស្វ័យប្រវត្ត
-      if (user.lastuseddate !== todayStr) {
-        try {
-          await pool.query("UPDATE users SET usedminutes = 0, lastuseddate = $1 WHERE userid = $2", [todayStr, userId]);
-          currentUsedMinutes = 0;
-          console.log(`User ${userId} - Daily usage reset to 0 for new date ${todayStr}`);
-        } catch (err) {
-          console.error("Error resetting daily minutes:", err);
-        }
-      }
-
-      // ខ. ឆែកមើលលក្ខខណ្ឌ ៥ ម៉ោង (៣០០ នាទី)
-      if (currentUsedMinutes >= 300) {
-        clientWs.send(JSON.stringify({ error: "អ្នកបានប្រើប្រាស់អស់កំណត់ ៥ ម៉ោងសម្រាប់ថ្ងៃនេះហើយ! សូមរង់ចាំស្អែកទើបអាចប្រើបានម្តងទៀត。" }));
-        clientWs.close();
-        return;
-      }
-
-      // 🔥 ជំហានទី ៣៖ ទាញយក Key ( ឥឡូវវានឹង return Key ពិតមក )
+      // 🔥 ជំហានទី ២៖ ទាញយក Key ( ឥឡូវវានឹង return Key ពិតមក )
       // ជ្រើសរើស Key: បើ User មាន Key ខ្លួនឯង ប្រើ Key ខ្លួនឯង បើអត់ទេប្រើ Key បង្វិលជុំ (Pool)
       let apiKeyToUse = user.geminiapikey || getNextGeminiKey();
 
@@ -476,29 +452,14 @@ Translation rules:
         clientWs.close();
       }
 
-      // 🔥 ផ្នែកទី ៣៖ កូដកាត់នាទីរបស់ User (ពេលគាត់បិទកម្មវិធី ឬដាច់លីង)
-      clientWs.on("close", async () => {
+      // 🔥 ផ្នែកទី ៣៖ កូដដែលបានលុបការកាត់នាទីចេញតាមការស្នើសុំ
+      clientWs.on("close", () => {
         if (liveSession) {
           liveSession.close();
         }
         clearTimeout(idleTimeoutTimer); // 🔥 លុប Timer ចោល ពេលគាត់បិទ
 
-        const endTime = Date.now();
-        const sessionMinutes = (endTime - startTime) / 1000 / 60; // គណនាជាំនាទី
-
-        try {
-          if (sessionMinutes > 0.05) { // និយាយលើសពី ៣ វិនាទី ទើបកាត់ម៉ោង
-            await pool.query(
-              "UPDATE users SET usedminutes = usedminutes + $1 WHERE userid = $2",
-              [sessionMinutes, userId]
-            );
-            console.log(`User ${userId} បាននិយាយអស់ ${sessionMinutes.toFixed(2)} នាទី។`);
-          }
-        } catch (err) {
-          console.error("Error updating talk minutes:", err);
-        }
-
-        console.log(`Client session ended for ${userId}`);
+        console.log(`User ${userId} បានចាកចេញ (លែងកាត់នាទីទៀតហើយ)។`);
       });
 
     } catch (err) {
