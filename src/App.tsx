@@ -392,7 +392,7 @@ export default function App() {
   const getLanguageLabel = (code: string) => {
     const labels: Record<string, string> = {
       km: 'ខ្មែរ (Khmer)', en: 'អង់គ្លេស (English)', zh: 'ចិន (Chinese)', 'zh-HK': 'ចិនកាតាំង (Cantonese)',
-      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរ៉េ (Korean)', th: 'ថៃ (Thai)',
+      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរែ (Korean)', th: 'ថៃ (Thai)',
       id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡេស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
       de: 'អាល្លឺម៉ង់ (German)', no: 'ន័រវែស (Norwegian)', hi: 'ហិណ្ឌី (Hindi)', fil: 'ហ្វីលីពិន (Filipino)',
       mn: 'ម៉ុងហ្គោលី (Mongolian)', it: 'អ៊ីតាលី (Italian)', he: 'ហេប្រឺ (Hebrew)', ru: 'រុស្ស៊ី (Russian)', my: 'ភូមា (Burmese)'
@@ -867,10 +867,21 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => {
-                      // បង្កើតសារអត្ថបទអូតូដើម្បីផ្ញើទៅកាន់ Telegram
-                      const message = encodeURIComponent(`សួស្ដីបង! ខ្ញុំបានបង់ប្រាក់លើកញ្ចប់ ${selectedPlan.name} (${selectedPlan.price}) រួចរាល់ហើយ。\n\nID ម៉ាស៊ីនរបស់ខ្ញុំ៖ ${userId}\n\n[សូមភ្ជាប់រូបភាពវិក័យប័ត្រនៅទីនេះ]`);
-                      // បើកលីង្ក Telegram ទៅកាន់ username របស់អ្នក (ឧទហរណ៍៖ t.me/your_username)
-                      window.open(`https://t.me/hengheng56?text=${message}`, '_blank');
+                      // បង្កើតសារអត្ថបទអូតូដើម្បីផ្ញើទៅកាន់ Telegram តាមការចង់បានរបស់អ្នក
+                      const message = encodeURIComponent(`
+🆔 ID ម៉ាស៊ីន៖ ${userId}
+📦 កញ្ចប់ជ្រើសរើស៖ ${selectedPlan.name}
+💵 តម្លៃទូទាត់៖ ${selectedPlan.price}
+🏦 ធនាគារទូទាត់៖ ${activeBank === "aba" ? "ABA Bank" : "Acleda Bank"}
+
+👉 សូមចុច ផ្ញើ បន្ទាប់មកថតវិក័យប័ត្របង់ប្រាក់ផ្ញើមកម្ដងទៀត។
+`);
+                      
+                      // រក្សារចនាសម្ព័ន្ធ window.open ដដែល
+                      window.open(
+                        `https://t.me/hengheng56?text=${message}`,
+                        "_blank"
+                      );
                     }} 
                     className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
                   >
@@ -886,7 +897,7 @@ export default function App() {
                 <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3">
                   <Phone size={20} />
                 </div>
-                <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រចិត្ត)</h3>
+                <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រស្រចិត្ត)</h3>
                 <p className="text-xs text-slate-400 mb-4 leading-relaxed">
                   ងាយស្រួលសម្រាប់ការផ្ទៀងផ្ទាត់ និងជួយសម្រួលពេលមានបញ្ហា។ អ្នកអាចខ្វែងចោល [✕] ក៏បាន។
                 </p>
