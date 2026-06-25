@@ -17,7 +17,6 @@
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
-    "axios": "^1.18.1",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
@@ -27,7 +26,6 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "telegraf": "^4.16.3",
     "vite": "^6.2.3",
     "ws": "^8.21.0"
   },
