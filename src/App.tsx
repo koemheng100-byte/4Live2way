@@ -392,7 +392,7 @@ export default function App() {
   const getLanguageLabel = (code: string) => {
     const labels: Record<string, string> = {
       km: 'ខ្មែរ (Khmer)', en: 'អង់គ្លេស (English)', zh: 'ចិន (Chinese)', 'zh-HK': 'ចិនកាតាំង (Cantonese)',
-      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរែ (Korean)', th: 'ថៃ (Thai)',
+      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរ៉េ (Korean)', th: 'ថៃ (Thai)',
       id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡេស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
       de: 'អាល្លឺម៉ង់ (German)', no: 'ន័រវែស (Norwegian)', hi: 'ហិណ្ឌី (Hindi)', fil: 'ហ្វីលីពិន (Filipino)',
       mn: 'ម៉ុងហ្គោលី (Mongolian)', it: 'អ៊ីតាលី (Italian)', he: 'ហេប្រឺ (Hebrew)', ru: 'រុស្ស៊ី (Russian)', my: 'ភូមា (Burmese)'
@@ -845,8 +845,8 @@ export default function App() {
                 <div className="bg-white p-2 rounded-2xl max-w-[280px] mx-auto mb-3 shadow-md overflow-hidden flex items-center justify-center">
                   <img 
                     src={activeBank === 'aba' 
-                      ? "https://i.postimg.cc/ZKbZMfwm/photo-2026-06-24-00-14-01.jpg" // 👈 រូបភាព QR ABA របស់បង
-                      : "https://i.postimg.cc/FRXXgGY6/photo-2026-06-24-00-38-54.jpg" // 👈 រូបភាព QR Acleda របស់បង
+                      ? "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR ABA របស់បង
+                      : "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR Acleda របស់បង
                     } 
                     alt="Payment QR Code" 
                     className="w-full h-auto object-contain rounded-xl mx-auto"
