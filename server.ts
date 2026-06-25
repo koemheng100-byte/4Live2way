@@ -96,44 +96,68 @@ async function startServer() {
 
         // ២. ឱ្យ Google Vision អានអក្សរលើ Slip
         const slipText = await analyzeSlipText(imageUrl);
-        console.log(`--- ទិន្នន័យអានបានពី User ${userId} ---`, slipText);
+        const lowerSlipText = slipText.toLowerCase();
+        console.log(`--- ទិន្នន័យអានបានពី User ${userId} ---`, lowerSlipText);
 
-        // ៣. បង្កើតលក្ខខណ្ឌឆែក (ឆែកពាក្យថា Successful ឬ ជោគជ័យ និងឆែកតម្លៃលុយ)
-        const isSuccessful = slipText.includes("Successful") || slipText.includes("ជោគជ័យ") || slipText.includes("SUCCESS");
-        const hasValidAmount = slipText.includes("5.00") || slipText.includes("20,000"); 
+        // ៣. ពិនិត្យលក្ខខណ្ឌជោគជ័យ
+        const isSuccessful = 
+          lowerSlipText.includes("successful") || 
+          lowerSlipText.includes("success") || 
+          lowerSlipText.includes("ជោគជ័យ") || 
+          lowerSlipText.includes("ផ្ទេរប្រាក់ដោយជោគជ័យ");
 
-        if (isSuccessful && hasValidAmount) {
-          
-          // គណនាថ្ងៃ Expired បន្ថែម ៣០ ថ្ងៃ
-          const now = new Date();
-          now.setDate(now.getDate() + 30);
-          const expiredAtStr = now.toISOString();
-
-          // ៤. រត់កូដកែប្រែទិន្នន័យក្នុង Database Neon ភ្លាមៗ
-          const checkUser = await pool.query("SELECT * FROM users WHERE userid = $1", [userId]);
-          
-          if (checkUser.rows.length === 0) {
-            // បើរកមិនឃើញ User ទេ គឺបង្កើតថ្មីឱ្យតែម្តង
-            await pool.query(
-              "INSERT INTO users (userid, phonenumber, expiredat, plan, deleted, usedminutes) VALUES ($1, $2, $3, '30 Days', 0, 0)",
-              [userId, "", expiredAtStr]
-            );
-          } else {
-            // បើមាន User ស្រាប់ គឺកែប្រែថ្ងៃផុតកំណត់
-            await pool.query(
-              "UPDATE users SET expiredat = $1, plan = '30 Days', deleted = 0 WHERE userid = $2",
-              [expiredAtStr, userId]
-            );
-          }
-
-          ctx.reply(`✅ อបអរសាទរ! ការទូទាត់ត្រឹមត្រូវ។ គម្រោង "30 Days" របស់ User ID: ${userId} ត្រូវបានបើកដោយស្វ័យប្រវត្តហើយ! ផុតកំណត់ថ្ងៃទី៖ ${new Date(expiredAtStr).toLocaleDateString()}`);
-        } else {
-          ctx.reply("❌ វិក្កយបត្រមិនត្រឹមត្រូវ ចំនួនទឹកប្រាក់មិនគ្រប់គ្រាន់ ឬរូបភាពមិនច្បាស់ឡើយ។ សូមពិនិត្យឡើងវិញ!");
+        if (!isSuccessful) {
+          return ctx.reply("❌ វិក្កយបត្រនេះមិនទាន់មានស្ថានភាពផ្ទេរប្រាក់ជោគជ័យ ឬរូបភាពមិនច្បាស់ឡើយ។");
         }
+
+        // ៤. ឆែករកមើលគម្រោងតម្លៃនៅលើ Slip ស្វ័យប្រវត្តិ
+        let daysToAdd = 0;
+        let planName = "";
+
+        if (lowerSlipText.includes("0.50") || lowerSlipText.includes("0,50")) {
+          daysToAdd = 1;
+          planName = "1 Day";
+        } else if (lowerSlipText.includes("1.00") || lowerSlipText.includes("1,00")) {
+          daysToAdd = 7;
+          planName = "1 Week";
+        } else if (lowerSlipText.includes("3.00") || lowerSlipText.includes("3,00") || lowerSlipText.includes("12,000")) {
+          // ដុតទាំងតម្លៃរៀល (ប្រហែល 12,000៛) ក្នុងករណីមាន
+          daysToAdd = 30;
+          planName = "30 Days";
+        }
+
+        // បើឆែកតម្លៃលុយទៅរកមិនឃើញគម្រោងណាមួយឡើយ
+        if (daysToAdd === 0) {
+          return ctx.reply("❌ ចំនួនទឹកប្រាក់នៅលើ Slip មិនត្រូវនឹងគម្រោងណាមួយឡើយ (គម្រោងមាន៖ 0.50$, 1.00$, 3.00$)។");
+        }
+
+        // ៥. គណនាថ្ងៃ Expired ថ្មី (បូកបន្ថែមថ្ងៃពីលើថ្ងៃបច្ចុប្បន្ន)
+        const now = new Date();
+        now.setDate(now.getDate() + daysToAdd);
+        const expiredAtStr = now.toISOString().split('T')[0]; // ទម្រង់ YYYY-MM-DD
+
+        // ៦. រត់កូដកែប្រែទិន្នន័យក្នុង Database Neon ភ្លាមៗ
+        const checkUser = await pool.query("SELECT * FROM users WHERE userid = $1", [userId]);
+        
+        if (checkUser.rows.length === 0) {
+          // បើរកមិនឃើញ User ទេ គឺបង្កើតថ្មីឱ្យតែម្តង
+          await pool.query(
+            "INSERT INTO users (userid, expiredat, plan) VALUES ($1, $2, $3)",
+            [userId, expiredAtStr, planName]
+          );
+        } else {
+          // បើមាន User ស្រាប់ គឺកែប្រែថ្ងៃផុតកំណត់ និងឈ្មោះគម្រោង
+          await pool.query(
+            "UPDATE users SET expiredat = $1, plan = $2 WHERE userid = $3",
+            [expiredAtStr, planName, userId]
+          );
+        }
+
+        ctx.reply(`✅ អបអរសាទរ! ការទូទាត់ត្រឹមត្រូវ។ គម្រោង "${planName}" របស់ User ID: ${userId} ត្រូវបានបើកដោយស្វ័យប្រវត្តហើយ! ផុតកំណត់ថ្ងៃទី៖ ${expiredAtStr}`);
 
       } catch (error) {
         console.error("Bot Processing Error:", error);
-        ctx.reply("💥 មានបញ្ហាបច្ចេកទេសក្នុងការពិនិត្យ Slip។ ក្រុមការងារនឹងពិនិត្យជូនផ្ទាល់ដៃ!");
+        ctx.reply("💥 មានបញ្ហាបច្ទេកទេសក្នុងការពិនិត្យ Slip។ ក្រុមការងារនឹងពិនិត្យជូនផ្ទាល់ដៃ!");
       }
     });
 
@@ -407,7 +431,7 @@ async function startServer() {
       res.json({ success: true, message: `បានថែមជូន ${daysNum} ថ្ងៃដោយជោគជ័យ!` });
     } catch (err) {
       console.error("Auto approve error:", err);
-      res.status(500).json({ error: "មានបញ្ហាបច្ចេកទេសក្នុង Database" });
+      res.status(500).json({ error: "មានបញ្ហាបច្ទេកទេសក្នុង Database" });
     }
   });
 
