@@ -275,8 +275,8 @@ export default function App() {
       }
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
-      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
-      const processor = inputAudioCtx.createScriptProcessor(2048, 1, 1);
+      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 1024
+      const processor = inputAudioCtx.createScriptProcessor(1024, 1, 1);
       processorRef.current = processor;
       inputSource.connect(processor);
       processor.connect(inputAudioCtx.destination);
