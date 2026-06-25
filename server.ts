@@ -376,21 +376,6 @@ Translation rules:
       
       let liveSession: any = null;
 
-      // 🔥 ប្រព័ន្ធ Idle Timeout (២ នាទីផ្ដាច់)
-      let idleTimeoutTimer: NodeJS.Timeout;
-      
-      function resetIdleTimeout() {
-        clearTimeout(idleTimeoutTimer);
-        idleTimeoutTimer = setTimeout(() => {
-          console.log(`User ${userId} ត្រូវដាច់ដោយស្វ័យប្រវត្ត ព្រោះមិននិយាយលើសពី ២ នាទី។`);
-          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្ត" }));
-          clientWs.close();
-        }, 120000); // ១២០,០០០ មីលីវិនាទី = ២ នាទី
-      }
-
-      // ចាប់ផ្ដើម Timer ភ្លាមៗពេលភ្ជាប់
-      resetIdleTimeout();
-
       try {
         // === បានកែសម្រួលផ្នែកបង្កើតសេសសិនជាមួយ Gemini Live ទៅតាម SDK ថ្មី ===
         liveSession = await ai.live.connect({
@@ -400,15 +385,6 @@ Translation rules:
             outputAudioTranscription: {},
             inputAudioTranscription: {},
             systemInstruction,
-            generationConfig: {
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: {
-                    voiceName: "Aoede", // ជ្រើសរើសសំឡេង Aoede
-                  },
-                },
-              },
-            },
           },
           callbacks: {
             onmessage: (message: any) => {
@@ -429,9 +405,6 @@ Translation rules:
         });
 
         clientWs.on("message", (data) => {
-          // 🔥 រាល់ពេល User និយាយ ឬផ្ញើសារមក ឱ្យ reset ពេលវេលា ២ នាទីឡើងវិញ
-          resetIdleTimeout();
-
           try {
             const msg = JSON.parse(data.toString());
             const { audio } = msg;
@@ -457,8 +430,6 @@ Translation rules:
         if (liveSession) {
           liveSession.close();
         }
-        clearTimeout(idleTimeoutTimer); // 🔥 លុប Timer ចោល ពេលគាត់បិទ
-
         console.log(`User ${userId} បានចាកចេញ (លែងកាត់នាទីទៀតហើយ)។`);
       });
 
