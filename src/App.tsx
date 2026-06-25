@@ -818,8 +818,8 @@ export default function App() {
                 <div className="bg-white p-2 rounded-2xl max-w-[280px] mx-auto mb-3 shadow-md overflow-hidden flex items-center justify-center">
                   <img 
                     src={activeBank === 'aba' 
-                      ? "https://i.postimg.cc/T1vZwCDb/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR ABA របស់បង
-                      : "https://i.postimg.cc/T1vZwCDb/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR Acleda របស់បង
+                      ? "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR ABA របស់បង
+                      : "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR Acleda របស់បង
                     } 
                     alt="Payment QR Code" 
                     className="w-full h-auto object-contain rounded-xl mx-auto"
@@ -840,18 +840,10 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => {
-                      // រៀបចំទម្រង់សារផ្ញើទៅកាន់ Telegram ឱ្យមានរបៀប និងភ្ជាប់ ID ម៉ាស៊ីនស្រាប់
-                      const textMessage = `🆔 ID ម៉ាស៊ីន៖ ${userId}\n` +
-                                          `📦 កញ្ចប់ជ្រើសរើស៖ ${selectedPlan.name}\n` +
-                                          `💵 តម្លៃទូទាត់៖ ${selectedPlan.price}\n` +
-                                          `🏦 ធនាគារទូទាត់៖ ${activeBank === 'aba' ? 'ABA Bank' : 'Acleda Bank'}\n` +
-                                          `👉 [សូមចុចផ្ញើបន្ទាប់មកថតវិក័យប័ត្របង់ប្រាក់ផ្ញើមកម្ដងទៀត]`;
-
-                      // ប្រើ encodeURIComponent ដើម្បីបំប្លែងអក្សរ និងសញ្ញាឱ្យទៅជា Link ដែល Telegram ស្គាល់
-                      const urlEncodedMessage = encodeURIComponent(textMessage);
-                      
-                      // បើកទៅកាន់ Telegram Chat របស់បងដោយស្វ័យប្រវត្ត រួមទាំងមានសារបំពេញស្រាប់ក្នុងប្រអប់វាយអក្សរ
-                      window.open(`https://t.me/hengheng56?text=${urlEncodedMessage}`, '_blank');
+                      // បង្កើតសារអត្ថបទអូតូដើម្បីផ្ញើទៅកាន់ Telegram
+                      const message = encodeURIComponent(`សួស្ដីបង! ខ្ញុំបានបង់ប្រាក់លើកញ្ចប់ ${selectedPlan.name} (${selectedPlan.price}) រួចរាល់ហើយ。\n\nID ម៉ាស៊ីនរបស់ខ្ញុំ៖ ${userId}\n\n[សូមភ្ជាប់រូបភាពវិក័យប័ត្រនៅទីនេះ]`);
+                      // បើកលីង្ក Telegram ទៅកាន់ username របស់អ្នក (ឧទាហរណ៍៖ t.me/your_username)
+                      window.open(`https://t.me/hengheng56?text=${message}`, '_blank');
                     }} 
                     className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
                   >
