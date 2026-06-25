@@ -467,9 +467,15 @@ Translation rules:
 
       // 🔥 ផ្នែកទី ៣៖ កូដកាត់នាទីរបស់ User (ពេលគាត់បិទកម្មវិធី ឬដាច់លីង)
       clientWs.on("close", async () => {
-        if (liveSession) {
-          liveSession.close();
+        try {
+          if (liveSession) {
+            await liveSession.close();
+            liveSession = null;
+          }
+        } catch (e) {
+          console.error(e);
         }
+        
         clearTimeout(idleTimeoutTimer); // 🔥 លុប Timer ចោល ពេលគាត់បិទ
 
         const endTime = Date.now();
