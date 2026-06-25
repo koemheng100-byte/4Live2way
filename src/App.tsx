@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useEffect, useRef, useState } from 'react';
-// បន្ថែម Premium Icons សម្រាប់មុខងារ Settings និង Key Visibility
-import { Mic, Monitor, Languages, ArrowLeftRight, Settings, Eye, EyeOff, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -29,14 +28,8 @@ export default function App() {
   const [captureMode, setCaptureMode] = useState<'mic' | 'screen'>('mic');
   const [dubbingMode, setDubbingMode] = useState<'ducking' | 'replacement'>('ducking');
 
-  // --- បន្ថែម State សម្រាប់ចំណាំពេលអ្នកប្រើកំពុងចុច Focus លើ Select ភាសា ---
+  // State សម្រាប់ចំណាំពេលអ្នកប្រើកំពុងចុច Focus លើ Select ភាសា
   const [focusedSelect, setFocusedSelect] = useState<'source' | 'target' | null>(null);
-
-  // --- API KEY & SETTINGS STATE ---
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_live_api_key') || '');
-  const [showKey, setShowKey] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
 
   const wsRef = useRef<WebSocket | null>(null);
   const inputAudioCtxRef = useRef<AudioContext | null>(null);
@@ -53,49 +46,82 @@ export default function App() {
   const screenGainNodeRef = useRef<GainNode | null>(null);
   const duckTimeoutRef = useRef<number | null>(null);
 
+  // កែប្រែចំណុចទី ៣៖ បន្ថែម lastTranscriptRef ដើម្បីការពារការស្ទួនទិន្នន័យអត្ថបទ
+  const lastTranscriptRef = useRef("");
+
+  // --- STATE បន្ថែមថ្មី សម្រាប់ប្រព័ន្ធគ្រប់គ្រងការបង់ប្រាក់ និង NO-AUTH ID ---
+  const [userId, setUserId] = useState<string>("");
+  const [isPaid, setIsPaid] = useState<boolean>(true); // សន្មតថាតានដានស្ថានភាពជាមុនសិន
+  const [showPayModal, setShowPayModal] = useState<boolean>(false);
+  const [payStep, setPayStep] = useState<number>(1); // 1: បង្ហាញ ID, 2: ជ្រើសរើសរយៈពេល, 3: ជ្រើសរើសធនាគារ/QR, 4: ដាក់លេខទូរសព្ទ
+  const [selectedPlan, setSelectedPlan] = useState<{ name: string; price: string; days: number } | null>(null);
+  const [copied, setCopied] = useState<boolean>(false);
+  const [inputPhone, setInputPhone] = useState<string>("");
+  const [expiryText, setExpiryText] = useState<string>("");
+  const [activeBank, setActiveBank] = useState<'aba' | 'acleda'>('aba'); // ចំណាំធនាគារដែលកំពុងជ្រើសរើស
+
+  // ១. បង្កើត ID ម៉ាស៊ីន និងឆែកស្ថានភាពបង់ប្រាក់ពេលបើកកម្មវិធីភ្លាម
   useEffect(() => {
+    let localId = localStorage.getItem("user_machine_id");
+    if (!localId) {
+      // បង្កើត ID គំរូថ្មីមួយដោយស្វ័យប្រវត្តិ (ឧទហរណ៍៖ L2W-XXXXXX)
+      localId = "L2W-" + Math.floor(100000 + Math.random() * 900000);
+      localStorage.setItem("user_machine_id", localId);
+    }
+    setUserId(localId);
+    checkSubscriptionStatus(localId);
+
     return () => {
       if (subtitleTimeoutRef.current) clearTimeout(subtitleTimeoutRef.current);
       if (duckTimeoutRef.current) clearTimeout(duckTimeoutRef.current);
     };
   }, []);
 
-  // មុខងាររក្សាទុក API Key ចូលក្នុង LocalStorage
-  const handleSaveKey = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem('gemini_live_api_key', apiKey.trim());
-      alert("API Key ត្រូវបានរក្សាទុកដោយជោគជ័យ!");
-    }
-  };
-
-  // មុខងារលុប API Key ចេញពី LocalStorage
-  const handleRemoveKey = () => {
-    localStorage.removeItem('gemini_live_api_key');
-    setApiKey('');
-    setTestStatus('idle');
-    alert("API Key ត្រូវបានលុបចេញពីឧបករណ៍នេះ!");
-  };
-
-  // មុខងារសាកល្បងភ្ជាប់ API Key (Test Connection)
-  const handleTestConnection = async () => {
-    if (!apiKey.trim()) return;
-    setTestStatus('testing');
+  const checkSubscriptionStatus = async (id: string) => {
     try {
-      const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const testWs = new WebSocket(`${wsProtocol}//${location.host}/live?source=km&target=en&apiKey=${encodeURIComponent(apiKey.trim())}`);
-      
-      testWs.onopen = () => {
-        setTestStatus('success');
-        setTimeout(() => testWs.close(), 1000);
-      };
-
-      testWs.onerror = () => {
-        setTestStatus('failed');
-      };
-    } catch (err) {
-      setTestStatus('failed');
+      const res = await fetch(`/api/check-status/${id}`);
+      const data = await res.json();
+      setIsPaid(data.active);
+      if (data.active && data.expiredAt) {
+        const date = new Date(data.expiredAt);
+        setExpiryText(`ផុតកំណត់៖ ${date.toLocaleDateString()} ${date.toLocaleTimeString()}`);
+      } else {
+        setExpiryText("មិនទាន់បានបង់ប្រាក់ ឬអស់សុពលភាព");
+      }
+    } catch (e) {
+      console.error("Error checking subscription status:", e);
     }
   };
+
+  const copyIdToClipboard = () => {
+    navigator.clipboard.writeText(userId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSavePhone = async () => {
+    if (inputPhone.trim()) {
+      try {
+        await fetch("/api/save-phone", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, phoneNumber: inputPhone })
+        });
+      } catch (e) {
+        console.error("Error saving phone:", e);
+      }
+    }
+    setShowPayModal(false);
+    checkSubscriptionStatus(userId);
+  };
+
+  const calculateDatesText = (days: number) => {
+    const start = new Date();
+    const end = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    return `បង់ពីថ្ងៃនេះ៖ ${start.toLocaleDateString()} -> ផុតកំណត់៖ ${end.toLocaleDateString()}`;
+  };
+
+  // -------------------------------------------------------------
 
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
     const binary = atob(base64Audio);
@@ -137,7 +163,11 @@ export default function App() {
   };
 
   const stopTranslation = () => {
+    // កែប្រែចំណុចទី ៤៖ លុបចោល Event Handlers និងបិទ WebSocket ដើម្បីកុំឱ្យវានៅបន្តស្តាប់ពេលឈប់
     if (wsRef.current) {
+      wsRef.current.onmessage = null;
+      wsRef.current.onopen = null;
+      wsRef.current.onclose = null;
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -170,10 +200,17 @@ export default function App() {
   };
 
   const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode) => {
-    if (!apiKey.trim()) {
-      setIsSettingsOpen(true);
-      alert("សូមកំណត់ និងរក្សាទុក Gemini API Key របស់អ្នកជាមុនសិន!");
+    // បន្ថែមលក្ខខណ្ឌ៖ បើមិនទាន់បង់ប្រាក់ មិនអនុញ្ញាតឱ្យបើកប្រព័ន្ធបកប្រែឡើយ ហើយបង្ហាញផ្ទាំងបង់ប្រាក់ភ្លាម
+    if (!isPaid) {
+      setPayStep(1);
+      setShowPayModal(true);
       return;
+    }
+
+    // កែប្រែចំណុចទី ២៖ បិទ WebSocket ចាស់ចោលសិនមុននឹងបង្កើតថ្មី ការពារការជាន់គ្នា
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
     try {
@@ -216,8 +253,9 @@ export default function App() {
       mediaStreamRef.current = audioStream;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       
+      // ផ្ញើ userId ទៅកាន់ server តាមរយៈ URL Parameter ដើម្បីផ្ទៀងផ្ទាត់ និងទាញយក API Key
       const ws = new WebSocket(
-        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&apiKey=${encodeURIComponent(apiKey.trim() || "")}`
+        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&userId=${userId}`
       );
       wsRef.current = ws;
 
@@ -237,7 +275,8 @@ export default function App() {
       }
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
-      const processor = inputAudioCtx.createScriptProcessor(512, 1, 1);
+      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
+      const processor = inputAudioCtx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
       inputSource.connect(processor);
       processor.connect(inputAudioCtx.destination);
@@ -252,6 +291,11 @@ export default function App() {
 
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
+        if (msg.error) {
+          alert(msg.error);
+          stopTranslation();
+          return;
+        }
         if (msg.interrupted) {
           nextPlaybackTimeRef.current = outputAudioCtx.currentTime;
           return;
@@ -259,8 +303,12 @@ export default function App() {
         if (msg.audio) {
           playAudioChunk(outputAudioCtx, msg.audio);
         }
-        if (msg.outputTranscript) {
+        
+        // កែប្រែចំណុចទី ៣៖ ការពារការបង្ហាញ Transcript ជាន់គ្នា ឬទិន្នន័យដដែលៗ
+        if (msg.outputTranscript && msg.outputTranscript !== lastTranscriptRef.current) {
+          lastTranscriptRef.current = msg.outputTranscript;
           setLiveSubtitle(msg.outputTranscript);
+          
           if (subtitleTimeoutRef.current) clearTimeout(subtitleTimeoutRef.current);
           subtitleTimeoutRef.current = window.setTimeout(() => setLiveSubtitle(""), 4000);
 
@@ -316,27 +364,11 @@ export default function App() {
 
   const getLanguageLabel = (code: string) => {
     const labels: Record<string, string> = {
-      km: 'ខ្មែរ (Khmer)',
-      en: 'អង់គ្លេស (English)',
-      zh: 'ចិន (Chinese)',
-      'zh-HK': 'ចិនកាតាំង (Cantonese)',
-      vi: 'វៀតណាម (Vietnamese)',
-      ja: 'ជប៉ុន (Japanese)',
-      ko: 'កូរ៉េ (Korean)',
-      th: 'ថៃ (Thai)',
-      id: 'ឥណ្ឌូនេស៊ី (Indonesian)',
-      ms: 'ម៉ាឡេស៊ី (Malay)',
-      lo: 'ឡាវ (Lao)',
-      fr: 'បារាំង (French)',
-      de: 'អាល្លឺម៉ង់ (German)',
-      no: 'ន័រវែស (Norwegian)',
-      hi: 'ហិណ្ឌី (Hindi)',
-      fil: 'ហ្វីលីពិន (Filipino)',
-      mn: 'ម៉ុងហ្គោលី (Mongolian)',
-      it: 'អ៊ីតាលី (Italian)',
-      he: 'ហេប្រឺ (Hebrew)',
-      ru: 'រុស្ស៊ី (Russian)',
-      my: 'ភូមា (Burmese)'
+      km: 'ខ្មែរ (Khmer)', en: 'អង់គ្លេស (English)', zh: 'ចិន (Chinese)', 'zh-HK': 'ចិនកាតាំង (Cantonese)',
+      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរ៉េ (Korean)', th: 'ថៃ (Thai)',
+      id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡេស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
+      de: 'អាល្លឺម៉ង់ (German)', no: 'ន័រវែស (Norwegian)', hi: 'ហិណ្ឌី (Hindi)', fil: 'ហ្វីលីពិន (Filipino)',
+      mn: 'ម៉ុងហ្គោលី (Mongolian)', it: 'អ៊ីតាលី (Italian)', he: 'ហេប្រឺ (Hebrew)', ru: 'រុស្ស៊ី (Russian)', my: 'ភូមា (Burmese)'
     };
     return labels[code] || code;
   };
@@ -352,7 +384,7 @@ export default function App() {
         }
         @keyframes blink {
           0%, 90%, 100% { transform: scaleY(1); }
-          95% { transform: scaleY(0.1); }
+          55% { transform: scaleY(0.1); }
         }
         @keyframes wave-height {
           0%, 100% { height: 6px; opacity: 0.4; }
@@ -370,12 +402,20 @@ export default function App() {
       {/* HEADER */}
       <header className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#111625]/60 backdrop-blur-xl z-10">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-[#4F7CFF] rounded-lg flex items-center justify-center border border-white/10 shadow-sm">
+          <div 
+            onClick={() => { setPayStep(1); setShowPayModal(true); }}
+            className="w-8 h-8 bg-[#4F7CFF] rounded-lg flex items-center justify-center border border-white/10 shadow-sm cursor-pointer hover:bg-opacity-80 transition-all"
+          >
             <span className="text-white font-bold text-sm">ខ</span>
           </div>
-          <div>
-            <h1 className="text-sm font-semibold tracking-tight text-white">Live-Translate</h1>
-            <p className="text-[8px] uppercase tracking-[0.2em] text-[#A1A1AA]">2-Way Interpreter</p>
+          <div className="cursor-pointer" onClick={() => { setPayStep(1); setShowPayModal(true); }}>
+            <h1 className="text-sm font-semibold tracking-tight text-white flex items-center gap-1.5">
+              Live-Translate 
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${isPaid ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                {isPaid ? "Premium" : "បង់ប្រាក់"}
+              </span>
+            </h1>
+            <p className="text-[8px] uppercase tracking-[0.2em] text-[#A1A1AA] truncate max-w-[150px] font-mono">{userId || "Loading ID..."}</p>
           </div>
         </div>
 
@@ -413,14 +453,6 @@ export default function App() {
               <Monitor size={14} />
             </button>
           </div>
-
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all"
-            title="API Settings"
-          >
-            <Settings size={14} />
-          </button>
         </div>
       </header>
 
@@ -444,7 +476,7 @@ export default function App() {
               onBlur={() => setFocusedSelect(null)}
               onChange={(e) => {
                 changeLanguages(e.target.value, targetLang);
-                e.target.blur(); // ដក focus ចេញក្រោយពេលជ្រើសរើសរួច
+                e.target.blur();
               }}
             >
               <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
@@ -489,7 +521,7 @@ export default function App() {
               onBlur={() => setFocusedSelect(null)}
               onChange={(e) => {
                 changeLanguages(sourceLang, e.target.value);
-                e.target.blur(); // ដក focus ចេញក្រោយពេលជ្រើសរើសរួច
+                e.target.blur();
               }}
             >
               <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
@@ -551,7 +583,7 @@ export default function App() {
               </div>
             </div>
 
-            <p className="text-[11px] text-center text-slate-400 max-w-[260px] leading-relaxed mt-3">
+            <p className="text-[11px] text-slate-400 max-w-[260px] leading-relaxed mt-3">
               {restarting
                 ? "កំពុងអនុវត្តភាសាថ្មី..."
                 : connected 
@@ -667,88 +699,196 @@ export default function App() {
         </div>
       )}
 
-      {/* PREMIUM SETTINGS MODAL */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fadeIn p-4">
-          <div className="bg-[#171A21] w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Settings size={16} className="text-[#4F7CFF]" />
-                <h2 className="text-sm font-semibold text-white">Configuration</h2>
-              </div>
+      {/* ========================================================================= */}
+      {/* ផ្ទាំង PREMIUM POPUP MODAL (លេចឡើងដោយមិនប៉ះពាល់ដល់ UI ចាស់ សម្រាប់បង់ប្រាក់) */}
+      {/* ========================================================================= */}
+      {showPayModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#111625] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center relative shadow-2xl">
+            
+            {/* ប៊ូតុងខ្វែងបិទ [X] លេចឡើងតែនៅជំហានទី 1 និងនៅជំហានទី 4 */}
+            {(payStep === 1 || payStep === 4) && (
               <button 
-                onClick={() => { setIsSettingsOpen(false); setTestStatus('idle'); }}
-                className="text-[#A1A1AA] hover:text-white text-xs bg-white/5 px-2.5 py-1 rounded-md border border-white/5"
+                onClick={() => setShowPayModal(false)} 
+                className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors p-1 text-sm font-bold"
               >
-                Close
+                ✕
               </button>
-            </div>
+            )}
 
-            <div className="p-5 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-wider text-[#A1A1AA] font-bold">Gemini API Key</label>
-                <div className="relative flex items-center">
-                  <input
-                    type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="AIzaSy..."
-                    className="w-full bg-black/30 border border-white/10 rounded-xl h-11 pl-3 pr-10 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[#4F7CFF] transition-all font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 text-[#A1A1AA] hover:text-white transition-colors"
+            {/* ជំហានទី ១៖ បង្ហាញ ID និងស្ថានភាពរួមទាំងប៊ូតុងបង់ប្រាក់ */}
+            {payStep === 1 && (
+              <div>
+                <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3 border border-[#4F7CFF]/30">
+                  <Languages size={22} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1">គណនីប្រើប្រាស់ប្រព័ន្ធ</h3>
+                <p className="text-[11px] text-slate-400 mb-4 font-mono">{expiryText}</p>
+
+                <div className="bg-white/[0.03] border border-white/5 p-3 rounded-2xl mb-4 flex justify-between items-center text-left">
+                  <div>
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500 block">ID ម៉ាស៊ីនរបស់អ្នក</span>
+                    <span className="text-xs text-slate-300 font-mono font-bold">{userId}</span>
+                  </div>
+                  <button 
+                    onClick={copyIdToClipboard}
+                    className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-[#4F7CFF] transition-all flex items-center gap-1 text-[11px]"
                   >
-                    {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => setPayStep(2)} 
+                  className="w-full bg-[#4F7CFF] hover:bg-[#3b66e0] py-3 rounded-2xl font-bold text-sm text-white shadow-lg transition-all"
+                >
+                  បង់ប្រាក់ដើម្បីប្រើប្រាស់
+                </button>
+              </div>
+            )}
+
+            {/* ជំហានទី ២៖ ជ្រើសរើសរយៈពេលប្រើប្រាស់ */}
+            {payStep === 2 && (
+              <div>
+                <h3 className="text-base font-bold text-white mb-1">ជ្រើសរើសរយៈពេលប្រើប្រាស់</h3>
+                <p className="text-xs text-slate-400 mb-4">ជ្រើសរើសកញ្ចប់ណាមួយដើម្បីបន្តទៅកាន់ការទូទាត់</p>
+                
+                <div className="space-y-2 mb-4">
+                  <button 
+                    onClick={() => { setSelectedPlan({ name: "1 ថ្ងៃ", price: "0.50$", days: 1 }); setPayStep(3); }}
+                    className="w-full bg-white/[0.03] hover:bg-white/5 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center text-sm font-semibold text-slate-200 transition-all"
+                  >
+                    <span>កញ្ចប់សាកល្បង (1 ថ្ងៃ)</span>
+                    <span className="text-[#4F7CFF]">0.50$</span>
+                  </button>
+                  <button 
+                    onClick={() => { setSelectedPlan({ name: "1 សប្ដាហ៍", price: "1.00$", days: 7 }); setPayStep(3); }}
+                    className="w-full bg-white/[0.03] hover:bg-white/5 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center text-sm font-semibold text-slate-200 transition-all"
+                  >
+                    <span>កញ្ចប់ប្រចាំសប្ដាហ៍ (1 សប្ដាហ៍)</span>
+                    <span className="text-[#4F7CFF]">1.00$</span>
+                  </button>
+                  <button 
+                    onClick={() => { setSelectedPlan({ name: "1 ខែ", price: "3.00$", days: 30 }); setPayStep(3); }}
+                    className="w-full bg-white/[0.03] hover:bg-white/5 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center text-sm font-semibold text-slate-200 transition-all"
+                  >
+                    <span>កញ្ចប់ពេញនិយម (1 ខែ)</span>
+                    <span className="text-[#4F7CFF]">3.00$</span>
+                  </button>
+                </div>
+
+                <button onClick={() => setPayStep(1)} className="text-xs text-slate-400 hover:text-white transition-colors underline">ត្រឡប់ក្រោយ</button>
+              </div>
+            )}
+
+            {/* ជំហានទី ៣៖ បង្ហាញរូបភាព QR Code ពិតប្រាកដរបស់ធនាគារ */}
+            {payStep === 3 && selectedPlan && (
+              <div>
+                <h3 className="text-base font-bold text-white mb-1">ស្កេនទូទាត់ប្រាក់ {selectedPlan.price}</h3>
+                <p className="text-[10px] text-emerald-400 font-medium mb-3 bg-emerald-500/10 py-1 px-2 rounded-lg inline-block">
+                  {calculateDatesText(selectedPlan.days)}
+                </p>
+
+                {/* ប៊ូតុងរើសធនាគារដើម្បីផ្លាស់ប្តូរការបង្ហាញរូបភាព QR ជាក់លាក់ */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button 
+                    onClick={() => setActiveBank('aba')}
+                    className={`p-2 rounded-xl text-center text-[11px] font-bold transition-all block border ${
+                      activeBank === 'aba' 
+                        ? 'bg-[#005A9C] text-white border-white/20' 
+                        : 'bg-[#005A9C]/10 text-slate-300 border-transparent'
+                    }`}
+                  >
+                    ធនាគារ ABA
+                  </button>
+                  <button 
+                    onClick={() => setActiveBank('acleda')}
+                    className={`p-2 rounded-xl text-center text-[11px] font-bold transition-all block border ${
+                      activeBank === 'acleda' 
+                        ? 'bg-[#D4AF37] text-black border-white/20' 
+                        : 'bg-[#D4AF37]/10 text-slate-300 border-transparent'
+                    }`}
+                  >
+                    ធនាគារ Acleda
+                  </button>
+                </div>
+
+                {/* ✅ កូដបង្ហាញរូបភាព QR ពិតប្រាកដរបស់អ្នក (ដោះស្រាយបញ្ហាស្កេនមិនស្គាល់) */}
+                <div className="bg-white p-2 rounded-2xl max-w-[280px] mx-auto mb-3 shadow-md overflow-hidden flex items-center justify-center">
+                  <img 
+                    src={activeBank === 'aba' 
+                      ? "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR ABA របស់បង
+                      : "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR Acleda របស់បង
+                    } 
+                    alt="Payment QR Code" 
+                    className="w-full h-auto object-contain rounded-xl mx-auto"
+                    style={{ maxHeight: '360px' }} // កំណត់កម្ពស់ឱ្យវែងសមល្មមនឹងរូបរាង QR ដើមរបស់ធនាគារខ្មែរ
+                  />
+                </div>
+
+                <p className="text-[10px] text-slate-400 mb-4 leading-tight">
+                  សូមថតQRនេះ ដើម្បីយកទៅស្កេនទូទាត់ប្រាក់នៅក្នុង App ធនាគាររបស់អ្នករួចផ្ញើមកTelegram។
+                </p>
+
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setPayStep(2)} 
+                    className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-300 py-2.5 rounded-xl font-bold text-xs transition-all"
+                  >
+                    ប្តូរកញ្ចប់
+                  </button>
+                  <button 
+                    onClick={() => {
+                      // បង្កើតសារអត្ថបទអូតូដើម្បីផ្ញើទៅកាន់ Telegram
+                      const message = encodeURIComponent(`សួស្ដីបង! ខ្ញុំបានបង់ប្រាក់លើកញ្ចប់ ${selectedPlan.name} (${selectedPlan.price}) រួចរាល់ហើយ。\n\nID ម៉ាស៊ីនរបស់ខ្ញុំ៖ ${userId}\n\n[សូមភ្ជាប់រូបភាពវិក័យប័ត្រនៅទីនេះ]`);
+                      // បើកលីង្ក Telegram ទៅកាន់ username របស់អ្នក (ឧទាហរណ៍៖ t.me/your_username)
+                      window.open(`https://t.me/hengheng56?text=${message}`, '_blank');
+                    }} 
+                    className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
+                  >
+                    ចុចផ្ញើវិក័យប័ត្របង់ប្រាក់ទៅTelegram
                   </button>
                 </div>
               </div>
+            )}
 
-              {testStatus !== 'idle' && (
-                <div className={`p-3 rounded-xl border text-xs flex items-center space-x-2 ${
-                  testStatus === 'testing' ? 'bg-yellow-500/5 border-yellow-500/20 text-yellow-400' :
-                  testStatus === 'success' ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' :
-                  'bg-red-500/5 border-red-500/20 text-red-400'
-                }`}>
-                  {testStatus === 'testing' && <div className="w-3 h-3 border-2 border-t-transparent border-yellow-400 rounded-full animate-spin"></div>}
-                  {testStatus === 'success' && <CheckCircle size={14} />}
-                  {testStatus === 'failed' && <XCircle size={14} />}
-                  <span>
-                    {testStatus === 'testing' && 'កំពុងសាកល្បងភ្ជាប់ទៅកាន់ Gemini...'}
-                    {testStatus === 'success' && 'ការភ្ជាប់ជោគជ័យ! API Key ត្រឹមត្រូវ។'}
-                    {testStatus === 'failed' && 'ការភ្ជាប់បរាជ័យ! សូមពិនិត្យ Key ម្តងទៀត។'}
-                  </span>
+            {/* ជំហានទី ៤៖ ផ្ទាំង Pop up បន្ថែមស្រេចចិត្ត ឱ្យវាយលេខទូរសព្ទភ្ជាប់ជាមួយ ID */}
+            {payStep === 4 && (
+              <div>
+                <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Phone size={20} />
                 </div>
-              )}
+                <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រចិត្ត)</h3>
+                <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                  ងាយស្រួលសម្រាប់ការផ្ទៀងផ្ទាត់ និងជួយសម្រួលពេលមានបញ្ហា។ អ្នកអាចខ្វែងចោល [✕] ក៏បាន។
+                </p>
 
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <button
-                  onClick={handleSaveKey}
-                  disabled={!apiKey.trim()}
-                  className="h-10 rounded-xl bg-[#4F7CFF] hover:bg-[#3B66F0] text-white font-semibold text-xs transition-all disabled:opacity-40"
-                >
-                  Save Key
-                </button>
-                <button
-                  onClick={handleTestConnection}
-                  disabled={!apiKey.trim() || testStatus === 'testing'}
-                  className="h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-xs transition-all disabled:opacity-40"
-                >
-                  Test Connection
-                </button>
+                <input 
+                  type="tel" 
+                  placeholder="បញ្ចូលលេខទូរស័ព្ទរបស់អ្នក" 
+                  className="w-full bg-white/[0.03] border border-white/10 p-3 rounded-2xl mb-4 text-center text-sm font-semibold focus:outline-none focus:border-[#4F7CFF] transition-all text-white placeholder-slate-500"
+                  value={inputPhone}
+                  onChange={(e) => setInputPhone(e.target.value)}
+                />
+
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setShowPayModal(false)} 
+                    className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-400 py-2.5 rounded-xl font-bold text-xs transition-all"
+                  >
+                    មិនដាក់ទេ
+                  </button>
+                  <button 
+                    onClick={handleSavePhone} 
+                    className="w-2/3 bg-[#4F7CFF] hover:bg-[#3b66e0] text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
+                  >
+                    រក្សាទុក (Save)
+                  </button>
+                </div>
               </div>
+            )}
 
-              {localStorage.getItem('gemini_live_api_key') && (
-                <button
-                  onClick={handleRemoveKey}
-                  className="w-full h-10 rounded-xl bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 font-semibold text-xs transition-all flex items-center justify-center space-x-1.5"
-                >
-                  <Trash2 size={12} />
-                  <span>Remove Key from Browser</span>
-                </button>
-              )}
-            </div>
           </div>
         </div>
       )}
