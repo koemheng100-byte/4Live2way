@@ -220,7 +220,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)。 សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ。");
           setCaptureMode('mic');
           return;
         }
@@ -234,7 +234,7 @@ export default function App() {
         const audioTracks = stream.getAudioTracks();
         if (audioTracks.length === 0) {
           stream.getTracks().forEach(track => track.stop());
-          alert("សូមប្រាកដថាអ្នកបានធិក (Tick) លើពាក្យ 'Share tab audio' ឬ 'Share system audio' មុនពេលចែករំលែកអេក្រង់។");
+          alert("សូមប្រាកដថាអ្នកបានធិក (Tick) លើពាក្យ 'Share tab audio' ឬ 'Share system audio' មុនពេលចែករំលែកអេក្រង់。");
           return;
         }
 
@@ -275,8 +275,8 @@ export default function App() {
       }
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
-      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
-      const processor = inputAudioCtx.createScriptProcessor(2048, 1, 1);
+      // 🛠️ កែប្រែ៖ ប្តូរ Buffer Size ពី 2048 ទៅ 512 ដើម្បីឱ្យស្រូបសំឡេងបានលឿនបំផុត (Real-time)
+      const processor = inputAudioCtx.createScriptProcessor(512, 1, 1);
       processorRef.current = processor;
       inputSource.connect(processor);
       processor.connect(inputAudioCtx.destination);
@@ -348,7 +348,7 @@ export default function App() {
     if (mode === 'screen') {
       const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
       if (isMobile) {
-        alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ។ សូមប្រើប្រាស់នៅលើកុំព្យូទ័រ (Desktop)។");
+        alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ。 សូមប្រើប្រាស់នៅលើកុំព្យូទ័រ (Desktop)。");
         return;
       }
     }
@@ -828,7 +828,7 @@ export default function App() {
                 </div>
 
                 <p className="text-[10px] text-slate-400 mb-4 leading-tight">
-                  សូមថតQRនេះ ដើម្បីយកទៅស្កេនទូទាត់ប្រាក់នៅក្នុង App ធនាគាររបស់អ្នករួចផ្ញើមកTelegram។
+                  សូមថតQRនេះ ដើម្បីយកទៅស្កេនទូទាត់ប្រាក់នៅក្នុង App ធនាគាររបស់អ្នករួចផ្ញើមកTelegram。
                 </p>
 
                 <div className="flex gap-2">

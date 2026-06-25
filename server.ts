@@ -407,7 +407,7 @@ Translation rules:
         clearTimeout(idleTimeoutTimer);
         idleTimeoutTimer = setTimeout(() => {
           console.log(`User ${userId} ត្រូវដាច់ដោយស្វ័យប្រវត្ត ព្រោះមិននិយាយលើសពី ២ នាទី។`);
-          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្តClient" }));
+          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្ត" }));
           clientWs.close();
         }, 120000); // ១២០,០០០ មីលីវិនាទី = ២ នាទី
       }
@@ -416,13 +416,23 @@ Translation rules:
       resetIdleTimeout();
 
       try {
+        // === បានកែសម្រួលផ្នែកបង្កើតសេសសិនជាមួយ Gemini Live ទៅតាម SDK ថ្មី ===
         liveSession = await ai.live.connect({
-          model: "gemini-3.1-flash-live-preview",
+          model: "gemini-2.0-flash-exp", 
           config: {
-            responseModalities: [Modality.AUDIO],
+            responseModalities: [Modality.AUDIO], // 🔥 បង្ខំឱ្យ AI និយាយចេញជាសំឡេងមកវិញ
             outputAudioTranscription: {},
             inputAudioTranscription: {},
             systemInstruction,
+            generationConfig: {
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: "Aoede", // ជ្រើសរើសសំឡេង Aoede
+                  },
+                },
+              },
+            },
           },
           callbacks: {
             onmessage: (message: any) => {
@@ -451,6 +461,7 @@ Translation rules:
             const { audio } = msg;
             if (audio && liveSession) {
               liveSession.sendRealtimeInput({
+                // រក្សាកម្រិត 16000 ដូចហ្វាល់ចាស់ដដែល
                 audio: { data: audio, mimeType: "audio/pcm;rate=16000" },
               });
             }
