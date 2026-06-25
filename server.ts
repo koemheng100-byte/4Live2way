@@ -12,7 +12,9 @@ import { pool } from "./db";
 // ==========================================
 const GEMINI_KEYS_POOL = [
   "GOOGLE_API_KEY_1", // Key ទី ១ ( placeholder )
-      // ដាក់ Key ផ្សេងទៀតដែលមានចូលក្នុងនេះ...
+  "GOOGLE_API_KEY_2", // Key ទី ២ ( placeholder )
+  "GOOGLE_API_KEY_3", // Key ទី ៣ ( placeholder )
+  // ដាក់ Key ផ្សេងទៀតដែលមានចូលក្នុងនេះ...
 ];
 
 let currentKeyIndex = 0;
