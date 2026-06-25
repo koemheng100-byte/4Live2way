@@ -6,41 +6,6 @@ import { WebSocketServer } from "ws";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { pool } from "./db";
 
-// ==========================================
-// ផ្នែកទី ១៖ បញ្ជី API Keys ហ្វ្រីទាំងអស់ (Round Robin)
-// 🔥 ជំហានទី ១៖ ប្តូរ API Keys ពិតប្រាកដទៅជាអក្សរសម្គាល់ (Placeholder) សិន
-// ==========================================
-const GEMINI_KEYS_POOL = [
-  "GOOGLE_API_KEY_1", // Key ទី ១ ( placeholder )
-  "GOOGLE_API_KEY_2", // Key ទី ២ ( placeholder )
-  "GOOGLE_API_KEY_3", // Key ទី ៣ ( placeholder )
-  // ដាក់ Key ផ្សេងទៀតដែលមានចូលក្នុងនេះ...
-];
-
-let currentKeyIndex = 0;
-
-// 🔥 ជំហានទី ២៖ កែ Function ឱ្យអាន Key ពិតចេញពី Environment (Render / .env)
-function getNextGeminiKey() {
-  if (GEMINI_KEYS_POOL.length === 0) return null;
-  
-  // ១. ទាញយកឈ្មោះ placeholder (ឧ. "GOOGLE_API_KEY_1")
-  const keyName = GEMINI_KEYS_POOL[currentKeyIndex];
-  
-  // ២. ទាញយក Key ពិតចេញពី process.env
-  const activeKey = process.env[keyName];
-
-  // ៣. វិលជុំ
-  currentKeyIndex = (currentKeyIndex + 1) % GEMINI_KEYS_POOL.length;
-
-  // ៤. ឆែកមើលបើ Key នោះអត់មានក្នុង .env / Render Environment
-  if (!activeKey) {
-    console.error(`Missing Environment Variable for: ${keyName}`);
-    return null;
-  }
-  
-  return activeKey;
-}
-
 async function startServer() {
   const app = express();
   app.use(express.json());
@@ -313,10 +278,7 @@ async function startServer() {
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
 
-    const startTime = Date.now(); // 🔥 គណនាម៉ោងចាប់ផ្ដើមនិយាយ
-
     try {
-      // 🔥 ១. ឆែកមើលទិន្នន័យ User ពី Database
       const result = await pool.query("SELECT * FROM users WHERE userid = $1 AND deleted != 1", [userId]);
       const user = result.rows[0];
 
@@ -333,35 +295,11 @@ async function startServer() {
         return;
       }
 
-      // 🔥 ២. ប្រព័ន្ធកំណត់ ៥ ម៉ោង (៣០០ នាទី) ប្រចាំថ្ងៃ
-      const todayStr = new Date().toISOString().split('T')[0]; // ទាញយកថ្ងៃខែថ្ងៃនេះ
-      let currentUsedMinutes = Number(user.usedminutes) || 0;
-
-      // ក. បើចូលដល់ថ្ងៃថ្មី ត្រូវ Reset នាទីឱ្យបាននិយាយ ០ នាទីឡើងវិញដោយស្វ័យប្រវត្ត
-      if (user.lastuseddate !== todayStr) {
-        try {
-          await pool.query("UPDATE users SET usedminutes = 0, lastuseddate = $1 WHERE userid = $2", [todayStr, userId]);
-          currentUsedMinutes = 0;
-          console.log(`User ${userId} - Daily usage reset to 0 for new date ${todayStr}`);
-        } catch (err) {
-          console.error("Error resetting daily minutes:", err);
-        }
-      }
-
-      // ខ. ឆែកមើលលក្ខខណ្ឌ ៥ ម៉ោង (៣០០ នាទី)
-      if (currentUsedMinutes >= 300) {
-        clientWs.send(JSON.stringify({ error: "អ្នកបានប្រើប្រាស់អស់កំណត់ ៥ ម៉ោងសម្រាប់ថ្ងៃនេះហើយ! សូមរង់ចាំស្អែកទើបអាចប្រើបានម្តងទៀត。" }));
-        clientWs.close();
-        return;
-      }
-
-      // 🔥 ជំហានទី ៣៖ ទាញយក Key ( ឥឡូវវានឹង return Key ពិតមក )
-      // ជ្រើសរើស Key: បើ User មាន Key ខ្លួនឯង ប្រើ Key ខ្លួនឯង បើអត់ទេប្រើ Key បង្វិលជុំ (Pool)
-      let apiKeyToUse = user.geminiapikey || getNextGeminiKey();
+      const apiKeyToUse = user.geminiapikey || process.env.GEMINI_API_KEY;
 
       if (!apiKeyToUse) {
         console.error("Connection rejected: No API Key found in server environment.");
-        clientWs.send(JSON.stringify({ error: "Server កំពុងមានបញ្ហា config សោរ Gemini។ សូមព្យាយាមម្តងទៀត។" }));
+        clientWs.send(JSON.stringify({ error: "Server missing Gemini API Key configuration." }));
         clientWs.close();
         return;
       }
@@ -400,21 +338,6 @@ Translation rules:
       
       let liveSession: any = null;
 
-      // 🔥 ប្រព័ន្ធ Idle Timeout (២ នាទីផ្ដាច់)
-      let idleTimeoutTimer: NodeJS.Timeout;
-      
-      function resetIdleTimeout() {
-        clearTimeout(idleTimeoutTimer);
-        idleTimeoutTimer = setTimeout(() => {
-          console.log(`User ${userId} ត្រូវដាច់ដោយស្វ័យប្រវត្ត ព្រោះមិននិយាយលើសពី ២ នាទី។`);
-          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្តClient" }));
-          clientWs.close();
-        }, 120000); // ១២០,០០០ មីលីវិនាទី = ២ នាទី
-      }
-
-      // ចាប់ផ្ដើម Timer ភ្លាមៗពេលភ្ជាប់
-      resetIdleTimeout();
-
       try {
         liveSession = await ai.live.connect({
           model: "gemini-3.1-flash-live-preview",
@@ -443,9 +366,6 @@ Translation rules:
         });
 
         clientWs.on("message", (data) => {
-          // 🔥 រាល់ពេល User និយាយ ឬផ្ញើសារមក ឱ្យ reset ពេលវេលា ២ នាទីឡើងវិញ
-          resetIdleTimeout();
-
           try {
             const msg = JSON.parse(data.toString());
             const { audio } = msg;
@@ -465,31 +385,12 @@ Translation rules:
         clientWs.close();
       }
 
-      // 🔥 ផ្នែកទី ៣៖ កូដកាត់នាទីរបស់ User (ពេលគាត់បិទកម្មវិធី ឬដាច់លីង)
-      clientWs.on("close", async () => {
+      clientWs.on("close", () => {
         if (liveSession) {
           liveSession.close();
         }
-        clearTimeout(idleTimeoutTimer); // 🔥 លុប Timer ចោល ពេលគាត់បិទ
-
-        const endTime = Date.now();
-        const sessionMinutes = (endTime - startTime) / 1000 / 60; // គណនាជាំនាទី
-
-        try {
-          if (sessionMinutes > 0.05) { // និយាយលើសពី ៣ វិនាទី ទើបកាត់ម៉ោង
-            await pool.query(
-              "UPDATE users SET usedminutes = usedminutes + $1 WHERE userid = $2",
-              [sessionMinutes, userId]
-            );
-            console.log(`User ${userId} បាននិយាយអស់ ${sessionMinutes.toFixed(2)} នាទី។`);
-          }
-        } catch (err) {
-          console.error("Error updating talk minutes:", err);
-        }
-
         console.log(`Client session ended for ${userId}`);
       });
-
     } catch (err) {
       clientWs.send(JSON.stringify({ error: "Database error occurred." }));
       clientWs.close();
