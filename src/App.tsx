@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useEffect, useRef, useState } from 'react';
-import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone, GraduationCap, RefreshCw } from 'lucide-react';
+import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -59,13 +59,6 @@ export default function App() {
   const [inputPhone, setInputPhone] = useState<string>("");
   const [expiryText, setExpiryText] = useState<string>("");
   const [activeBank, setActiveBank] = useState<'aba' | 'acleda'>('aba'); // ចំណាំធនាគារដែលកំពុងជ្រើសរើស
-
-  // ==========================================
-  // 🌟 STATES ថ្មីបន្ថែមសម្រាប់ LEARNING MODE 🌟
-  // ==========================================
-  const [appMode, setAppMode] = useState<'translate' | 'learning'>('translate');
-  const [correctionText, setCorrectionText] = useState<string>("");
-  const [requireRepeat, setRequireRepeat] = useState<boolean>(false);
 
   // ១. បង្កើត ID ម៉ាស៊ីន និងឆែកស្ថានភាពបង់ប្រាក់ពេលបើកកម្មវិធីភ្លាម
   useEffect(() => {
@@ -213,11 +206,9 @@ export default function App() {
     nextPlaybackTimeRef.current = 0;
     setConnected(false);
     setLiveSubtitle("");
-    setCorrectionText("");
-    setRequireRepeat(false);
   };
 
-  const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode, currentMode = appMode) => {
+  const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode) => {
     // បន្ថែមលក្ខខណ្ឌ៖ បើមិនទាន់បង់ប្រាក់ មិនអនុញ្ញាតឱ្យបើកប្រព័ន្ធបកប្រែឡើយ ហើយបង្ហាញផ្ទាំងបង់ប្រាក់ភ្លាម
     if (!isPaid) {
       setPayStep(1);
@@ -271,9 +262,9 @@ export default function App() {
       mediaStreamRef.current = audioStream;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       
-      // ផ្ញើ userId និង parameters រួមទាំង appMode, targetLang ទៅកាន់ server តាមរយៈ URL Parameter
+      // ផ្ញើ userId ទៅកាន់ server តាមរយៈ URL Parameter ដើម្បីផ្ទៀងផ្ទាត់ និងទាញយក API Key
       const ws = new WebSocket(
-        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&userId=${userId}&mode=${currentMode}&targetLang=${activeTarget}`
+        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&userId=${userId}`
       );
       wsRef.current = ws;
 
@@ -319,42 +310,15 @@ export default function App() {
           stopTranslation();
           return;
         }
-        
-        // ប្រសិនបើ AI កាត់សម្តី (interrupted) ត្រូវកាត់សំឡេង និងដូរ Subtitle ទៅជា AI កំពុងកែតម្រូវ
         if (msg.interrupted) {
-          if (outputAudioCtxRef.current) {
-            nextPlaybackTimeRef.current = outputAudioCtxRef.current.currentTime;
-          }
-          setLiveSubtitle("AI កំពុងកែតម្រូវ...");
+          nextPlaybackTimeRef.current = outputAudioCtx.currentTime;
           return;
         }
-        
         if (msg.audio) {
           playAudioChunk(outputAudioCtx, msg.audio);
         }
         
-        // ចាប់យក JSON ពី Server ក្នុងករណីជា textData សម្រាប់ប្រព័ន្ធ Learning Mode
-        if (msg.textData) {
-          try {
-            const data = typeof msg.textData === 'string' ? JSON.parse(msg.textData) : msg.textData;
-            if (data.transcript) setLiveSubtitle(data.transcript);
-            if (data.correction !== undefined) setCorrectionText(data.correction);
-            if (data.requireRepeat !== undefined) setRequireRepeat(data.requireRepeat);
-            
-            if (data.transcript && data.transcript !== lastTranscriptRef.current) {
-              lastTranscriptRef.current = data.transcript;
-              setTranscript(prev => [
-                ...prev.slice(-19),
-                { original: data.original || "...", translated: data.transcript || "" }
-              ]);
-            }
-            return;
-          } catch (e) {
-            console.error("Error parsing textData JSON:", e);
-          }
-        }
-        
-        // កែប្រែចំណុចទី ៣៖ ការពារការបង្ហាញ Transcript ជាន់គ្នា ឬទិន្នន័យដដែលៗ (សម្រាប់ Mode ធម្មតា)
+        // កែប្រែចំណុចទី ៣៖ ការពារការបង្ហាញ Transcript ជាន់គ្នា ឬទិន្នន័យដដែលៗ
         if (msg.outputTranscript && msg.outputTranscript !== lastTranscriptRef.current) {
           lastTranscriptRef.current = msg.outputTranscript;
           setLiveSubtitle(msg.outputTranscript);
@@ -400,7 +364,7 @@ export default function App() {
 
       const waitClose = () => {
         if (wsRef.current === null) {
-          startTranslation(newSource, newTarget, captureMode, appMode);
+          startTranslation(newSource, newTarget, captureMode);
         } else {
           setTimeout(waitClose, 100);
         }
@@ -425,32 +389,12 @@ export default function App() {
 
       const waitClose = () => {
         if (wsRef.current === null) {
-          startTranslation(sourceLang, targetLang, mode, appMode);
+          startTranslation(sourceLang, targetLang, mode);
         } else {
           setTimeout(waitClose, 100);
         }
       };
 
-      waitClose();
-    }
-  };
-
-  // អនុលោមតាមគោលការណ៍ណែនាំ៖ មុខងារសម្រាប់ប្តូរ Mode រវាង បកប្រែ និង រៀនភាសា
-  const handleAppModeChange = (mode: 'translate' | 'learning') => {
-    setAppMode(mode);
-    setCorrectionText("");
-    setRequireRepeat(false);
-    
-    if (connected) {
-      setRestarting(true);
-      stopTranslation();
-      const waitClose = () => {
-        if (wsRef.current === null) {
-          startTranslation(sourceLang, targetLang, captureMode, mode);
-        } else {
-          setTimeout(waitClose, 100);
-        }
-      };
       waitClose();
     }
   };
@@ -510,24 +454,6 @@ export default function App() {
             </h1>
             <p className="text-[8px] uppercase tracking-[0.2em] text-[#A1A1AA] truncate max-w-[150px] font-mono">{userId || "Loading ID..."}</p>
           </div>
-        </div>
-
-        {/* 🌟  ترمیم UI ផ្នែកខាងលើ៖ បន្ថែម Toggle Button សាមញ្ញសម្រាប់ប្តូររវាង "បកប្រែ" និង "រៀនភាសា" */}
-        <div className="flex bg-[#171A21] p-0.5 rounded-xl border border-white/5 mx-2">
-          <button
-            onClick={() => handleAppModeChange('translate')}
-            className={`px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${appMode === 'translate' ? 'bg-[#4F7CFF] text-white' : 'text-[#A1A1AA] hover:text-white'}`}
-          >
-            <Languages size={12} />
-            បកប្រែ
-          </button>
-          <button
-            onClick={() => handleAppModeChange('learning')}
-            className={`px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${appMode === 'learning' ? 'bg-amber-500 text-black' : 'text-[#A1A1AA] hover:text-white'}`}
-          >
-            <GraduationCap size={12} />
-            រៀនភាសា
-          </button>
         </div>
 
         <div className="flex items-center space-x-3">
@@ -665,15 +591,13 @@ export default function App() {
           <div className="relative flex flex-col items-center">
             <div className={`w-32 h-24 rounded-[40px] bg-gradient-to-b from-[#1E293B] to-[#0F172A] border-[3px] flex items-center justify-center p-4 shadow-2xl transition-all duration-300 relative
               ${connected 
-                ? appMode === 'learning' 
-                  ? 'border-amber-500 shadow-[0_0_30px_rgba(245,158,11,0.4)]' 
-                  : 'border-[#4F7CFF] shadow-[0_0_30px_rgba(79,124,255,0.4)]' 
+                ? 'border-[#4F7CFF] shadow-[0_0_30px_rgba(79,124,255,0.4)]' 
                 : 'border-[#334155] shadow-black'
               }`}
             >
               <div className="absolute -top-4 w-1 h-4 bg-slate-500 left-1/2 -translate-x-1/2">
                 <div className={`absolute -top-2 w-3 h-3 rounded-full left-1/2 -translate-x-1/2 shadow-lg transition-colors duration-300
-                  ${connected ? appMode === 'learning' ? 'bg-amber-500 shadow-[0_0_10px_#f59e0b]' : 'bg-[#4F7CFF] shadow-[0_0_10px_#4F7CFF]' : 'bg-slate-400'}`} 
+                  ${connected ? 'bg-[#4F7CFF] shadow-[0_0_10px_#4F7CFF]' : 'bg-slate-400'}`} 
                 />
               </div>
 
@@ -683,17 +607,13 @@ export default function App() {
               <div className="w-full h-full bg-[#090D1A] rounded-[24px] border border-white/5 flex items-center justify-center gap-6 px-4">
                 <div className={`w-5 h-5 rounded-full transition-all duration-300
                   ${connected 
-                    ? appMode === 'learning'
-                      ? 'bg-amber-500 shadow-[0_0_20px_#f59e0b] scale-110 animate-blink'
-                      : 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
+                    ? 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
                     : 'bg-[#2E5BFF] shadow-[0_0_10px_rgba(46,91,255,0.6)]'
                   }`} 
                 />
                 <div className={`w-5 h-5 rounded-full transition-all duration-300
                   ${connected 
-                    ? appMode === 'learning'
-                      ? 'bg-amber-500 shadow-[0_0_20px_#f59e0b] scale-110 animate-blink'
-                      : 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
+                    ? 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
                     : 'bg-[#2E5BFF] shadow-[0_0_10px_rgba(46,91,255,0.6)]'
                   }`} 
                 />
@@ -704,11 +624,7 @@ export default function App() {
               {restarting
                 ? "កំពុងអនុវត្តភាសាថ្មី..."
                 : connected 
-                ? appMode === 'learning'
-                  ? "គ្រូ AI កំពុងស្តាប់ការបញ្ចេញសំឡេង និងជួយកែតម្រូវ"
-                  : "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ"
-                : appMode === 'learning'
-                ? "សូមចុចប៊ូតុងខាងក្រោមដើម្បីចាប់ផ្តើមរៀននិយាយជាមួយគ្រូ AI"
+                ? "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ"
                 : "សូមចុចប៊ូតុង Live Translator ដើម្បីចាប់ផ្តើមបកប្រែ"
               }
             </p>
@@ -727,115 +643,89 @@ export default function App() {
         </div>
 
         {/* LOWER CENTER: LIVE TRANSLATOR PREMIUM CIRCULAR ORB */}
-        <div className="w-full flex flex-col justify-center items-center pt-4 pb-[130px] relative">
-          
-          {/* 🌟 ត្រង់បន្ថែម Component បង្ហាញការ Repeat (UI) ពណ៌លឿងទុំ (លោតចេញមកតែពេល requireRepeat === true) */}
-          {requireRepeat && correctionText && (
-            <div className="absolute -top-14 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-amber-500/20 border border-amber-500/40 p-3 rounded-2xl shadow-xl text-center backdrop-blur-xl animate-breathe z-20">
-              <p className="text-[11px] text-amber-400 font-bold uppercase tracking-wider mb-1 flex items-center justify-center gap-1">
-                <RefreshCw size={11} className="animate-spin" style={{ animationDuration: '3s' }} />
-                សូមនិយាយតាមគ្រូ AI
-              </p>
-              <h4 className="text-sm font-extrabold text-white font-mono">"{correctionText}"</h4>
-            </div>
+        <div className="w-full flex justify-center items-center pt-4 pb-[130px] relative">
+          {connected && (
+            <>
+              <div className="absolute left-4 md:left-12 flex items-center gap-1 h-10">
+                <div className="w-[3px] bg-cyan-400 rounded-full animate-wave-bar-1" />
+                <div className="w-[3px] bg-[#4F7CFF] rounded-full animate-wave-bar-2" />
+                <div className="w-[3px] bg-blue-500 rounded-full animate-wave-bar-3" />
+                <div className="w-[3px] bg-indigo-400 rounded-full animate-wave-bar-4" />
+              </div>
+              <div className="absolute right-4 md:right-12 flex items-center gap-1 h-10">
+                <div className="w-[3px] bg-indigo-400 rounded-full animate-wave-bar-4" />
+                <div className="w-[3px] bg-blue-500 rounded-full animate-wave-bar-3" />
+                <div className="w-[3px] bg-[#4F7CFF] rounded-full animate-wave-bar-2" />
+                <div className="w-[3px] bg-cyan-400 rounded-full animate-wave-bar-1" />
+              </div>
+            </>
           )}
 
-          <div className="relative flex items-center justify-center w-full">
-            {connected && (
-              <>
-                <div className="absolute left-4 md:left-12 flex items-center gap-1 h-10">
-                  <div className={`w-[3px] rounded-full animate-wave-bar-1 ${appMode === 'learning' ? 'bg-amber-400' : 'bg-cyan-400'}`} />
-                  <div className={`w-[3px] rounded-full animate-wave-bar-2 ${appMode === 'learning' ? 'bg-amber-500' : 'bg-[#4F7CFF]'}`} />
-                  <div className={`w-[3px] rounded-full animate-wave-bar-3 ${appMode === 'learning' ? 'bg-orange-500' : 'bg-blue-500'}`} />
-                  <div className={`w-[3px] rounded-full animate-wave-bar-4 ${appMode === 'learning' ? 'bg-yellow-400' : 'bg-indigo-400'}`} />
-                </div>
-                <div className="absolute right-4 md:right-12 flex items-center gap-1 h-10">
-                  <div className={`w-[3px] rounded-full animate-wave-bar-4 ${appMode === 'learning' ? 'bg-yellow-400' : 'bg-indigo-400'}`} />
-                  <div className={`w-[3px] rounded-full animate-wave-bar-3 ${appMode === 'learning' ? 'bg-orange-500' : 'bg-blue-500'}`} />
-                  <div className={`w-[3px] rounded-full animate-wave-bar-2 ${appMode === 'learning' ? 'bg-amber-500' : 'bg-[#4F7CFF]'}`} />
-                  <div className={`w-[3px] rounded-full animate-wave-bar-1 ${appMode === 'learning' ? 'bg-amber-400' : 'bg-cyan-400'}`} />
-                </div>
-              </>
-            )}
+          {connected ? (
+            <div className="relative flex items-center justify-center">
+              <div className="absolute -inset-2 rounded-full border border-red-500/40 animate-ping opacity-75" style={{ animationDuration: '1.8s' }} />
+              <div className="absolute -inset-4 rounded-full border border-red-600/20 animate-ping opacity-40" style={{ animationDuration: '2.5s' }} />
 
-            {connected ? (
-              <div className="relative flex items-center justify-center">
-                <div className="absolute -inset-2 rounded-full border border-red-500/40 animate-ping opacity-75" style={{ animationDuration: '1.8s' }} />
-                <div className="absolute -inset-4 rounded-full border border-red-600/20 animate-ping opacity-40" style={{ animationDuration: '2.5s' }} />
+              <button 
+                onClick={stopTranslation}
+                className="
+                  w-[140px] h-[140px] md:w-[180px] md:h-[180px]
+                  rounded-full
+                  bg-gradient-to-b from-[#EF4444] via-[#DC2626] to-[#991B1B]
+                  text-white
+                  shadow-[0_0_40px_rgba(239,68,68,0.7),inset_0_4px_12px_rgba(255,255,255,0.3)]
+                  border-2 border-red-400/50
+                  transition-all duration-300
+                  hover:scale-105 active:scale-95
+                  flex flex-col items-center justify-center select-none p-2
+                "
+              >
+                <Languages size={24} className="mb-1 text-red-100 md:w-7 md:h-7 drop-shadow-md" />
+                <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-red-100/90 leading-tight">Stop</span>
+                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
+              </button>
+            </div>
+          ) : (
+            <div className="relative flex items-center justify-center">
+              <div className="absolute -inset-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 blur opacity-40 group-hover:opacity-70 transition duration-1000" />
+              <div className="absolute -inset-3 rounded-full border border-blue-500/20 opacity-60" />
 
-                <button 
-                  onClick={stopTranslation}
-                  className="
-                    w-[140px] h-[140px] md:w-[180px] md:h-[180px]
-                    rounded-full
-                    bg-gradient-to-b from-[#EF4444] via-[#DC2626] to-[#991B1B]
-                    text-white
-                    shadow-[0_0_40px_rgba(239,68,68,0.7),inset_0_4px_12px_rgba(255,255,255,0.3)]
-                    border-2 border-red-400/50
-                    transition-all duration-300
-                    hover:scale-105 active:scale-95
-                    flex flex-col items-center justify-center select-none p-2
-                  "
-                >
-                  <Languages size={24} className="mb-1 text-red-100 md:w-7 md:h-7 drop-shadow-md" />
-                  <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-red-100/90 leading-tight">Stop</span>
-                  <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">
-                    {appMode === 'learning' ? "Teacher AI" : "Translator"}
-                  </span>
-                </button>
-              </div>
-            ) : (
-              <div className="relative flex items-center justify-center">
-                <div className={`absolute -inset-1.5 rounded-full blur opacity-40 group-hover:opacity-70 transition duration-1000 ${appMode === 'learning' ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-cyan-500 to-blue-600'}`} />
-                <div className={`absolute -inset-3 rounded-full border opacity-60 ${appMode === 'learning' ? 'border-amber-500/20' : 'border-blue-500/20'}`} />
-
-                <button 
-                  disabled={restarting}
-                  onClick={() => {
-                    if (!restarting) {
-                      startTranslation(sourceLang, targetLang, captureMode, appMode);
-                    }
-                  }}
-                  className={`
-                    w-[140px] h-[140px] md:w-[180px] md:h-[180px]
-                    rounded-full
-                    text-white
-                    transition-all duration-300
-                    hover:scale-105 active:scale-95
-                    flex flex-col items-center justify-center select-none p-2
-                    animate-breathe
-                    disabled:opacity-80 disabled:cursor-not-allowed
-                    ${appMode === 'learning' 
-                      ? 'bg-gradient-to-b from-amber-500 via-amber-600 to-orange-800 border-2 border-amber-400/40 shadow-[0_0_35px_rgba(245,158,11,0.6),inset_0_4px_12px_rgba(255,255,255,0.3)]' 
-                      : 'bg-gradient-to-b from-[#2563EB] via-[#1D4ED8] to-[#1E3A8A] border-2 border-blue-400/40 shadow-[0_0_35px_rgba(37,99,235,0.6),inset_0_4px_12px_rgba(255,255,255,0.3)]'
-                    }
-                  `}
-                >
-                  {appMode === 'learning' ? (
-                    <GraduationCap size={26} className="mb-1 text-amber-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
-                  ) : (
-                    <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-                  )}
-                  
-                  {restarting ? (
-                    <>
-                      <span className="text-[11px] text-cyan-100">Applying</span>
-                      <span className="text-sm font-bold text-white">New Language...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">
-                        {appMode === 'learning' ? "Learn" : "Live"}
-                      </span>
-                      <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">
-                        {appMode === 'learning' ? "Language" : "Translator"}
-                      </span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
+              <button 
+                disabled={restarting}
+                onClick={() => {
+                  if (!restarting) {
+                    startTranslation(sourceLang, targetLang, captureMode);
+                  }
+                }}
+                className="
+                  w-[140px] h-[140px] md:w-[180px] md:h-[180px]
+                  rounded-full
+                  bg-gradient-to-b from-[#2563EB] via-[#1D4ED8] to-[#1E3A8A]
+                  text-white
+                  border-2 border-blue-400/40
+                  shadow-[0_0_35px_rgba(37,99,235,0.6),inset_0_4px_12px_rgba(255,255,255,0.3)]
+                  transition-all duration-300
+                  hover:scale-105 active:scale-95
+                  flex flex-col items-center justify-center select-none p-2
+                  animate-breathe
+                  disabled:opacity-80 disabled:cursor-not-allowed
+                "
+              >
+                <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                {restarting ? (
+                  <>
+                    <span className="text-[11px] text-cyan-100">Applying</span>
+                    <span className="text-sm font-bold text-white">New Language...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">Live</span>
+                    <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </main>
 
