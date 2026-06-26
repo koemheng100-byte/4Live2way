@@ -123,7 +123,12 @@ export default function App() {
 
   // -------------------------------------------------------------
 
+  // កន្លែងទី២៖ កែប្រែ playAudioChunk ដើម្បីដាស់ AudioContext ដែល suspended លើ Safari/iOS
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+
     const binary = atob(base64Audio);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
@@ -224,7 +229,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ White។");
           setCaptureMode('mic');
           return;
         }
@@ -263,8 +268,13 @@ export default function App() {
       );
       wsRef.current = ws;
 
+      // កន្លែងទី១ និងទី៣៖ បង្កើត AudioContext និងលុប sampleRate ចេញពី outputAudioCtx ព្រមទាំងហៅប្រើ resume()
       const inputAudioCtx = new AudioContext({ latencyHint: "interactive", sampleRate: 16000 });
-      const outputAudioCtx = new AudioContext({ latencyHint: "interactive", sampleRate: 24000 });
+      const outputAudioCtx = new AudioContext({ latencyHint: "interactive" });
+
+      await inputAudioCtx.resume();
+      await outputAudioCtx.resume();
+
       inputAudioCtxRef.current = inputAudioCtx;
       outputAudioCtxRef.current = outputAudioCtx;
       nextPlaybackTimeRef.current = 0;
@@ -280,7 +290,7 @@ export default function App() {
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
       // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
-      const processor = inputAudioCtx.createScriptProcessor(2048, 1, 1);
+      const processor = inputAudioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
       inputSource.connect(processor);
       processor.connect(inputAudioCtx.destination);
