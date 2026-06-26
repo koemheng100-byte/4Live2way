@@ -5,7 +5,6 @@ import { createServer as createViteServer } from "vite";
 import { WebSocketServer } from "ws";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { pool } from "./db";
-import { createLearningSession } from "./learning_server";
 
 // ==========================================
 // ផ្នែកទី ១៖ បញ្ជី API Keys ហ្វ្រីទាំងអស់ (Round Robin)
@@ -306,19 +305,6 @@ async function startServer() {
     console.log("Client connected via WebSocket");
     
     const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
-    const pathname = url.pathname;
-
-    if (pathname === "/learning") {
-      console.log("Learning Mode");
-      await createLearningSession(clientWs, req);
-      return;
-    }
-
-    if (pathname !== "/live") {
-      clientWs.close();
-      return;
-    }
-
     const source = url.searchParams.get("source") || "km";
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
