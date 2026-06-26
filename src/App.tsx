@@ -53,8 +53,11 @@ export default function App() {
   // បានប្តូរពី processorRef ទៅ workletRef តាមការណែនាំ
   const workletRef = useRef<AudioWorkletNode | null>(null);
 
-  // កន្លែងទី១៖ បន្ថែម Ref ថ្មីពីរនៅខាងលើ nextPlaybackTimeRef
+  // ① បន្ថែម Ref ថ្មីនៅខាងលើតាមការណែនាំ
   const audioQueueRef = useRef<AudioBuffer[]>([]);
+  const MIN_QUEUE = 4;
+  const queueReadyRef = useRef(false);
+  
   const playingRef = useRef(false);
   const nextPlaybackTimeRef = useRef<number>(0);
   
@@ -136,15 +139,23 @@ export default function App() {
     return `បង់ពីថ្ងៃនេះ៖ ${start.toLocaleDateString()} -> ផុតកំណត់៖ ${end.toLocaleDateString()}`;
   };
 
-  // -------------------------------------------------------------
-
-  // កន្លែងទី២៖ ជំនួស Function playAudioChunk() ទាំងមូល និងបន្ថែម playNextAudio
+  // ② កែ playNextAudio() ជំនួស Function ទាំងមូលតាមការណែនាំថ្មី
   const playNextAudio = (ctx: AudioContext) => {
     if (playingRef.current) return;
 
+    if (!queueReadyRef.current) {
+      if (audioQueueRef.current.length < MIN_QUEUE) {
+        return;
+      }
+      queueReadyRef.current = true;
+    }
+
     const buffer = audioQueueRef.current.shift();
 
-    if (!buffer) return;
+    if (!buffer) {
+      queueReadyRef.current = false;
+      return;
+    }
 
     playingRef.current = true;
 
@@ -152,21 +163,20 @@ export default function App() {
     source.buffer = buffer;
     source.connect(ctx.destination);
 
-    source.onended = () => {
-      playingRef.current = false;
-      playNextAudio(ctx);
-    };
-
-    // ✅ កែប្រែត្រង់ចំណុចនេះតាមការណែនាំដើម្បីកំណត់ពេលវេលាចាក់ផ្សាយឱ្យបន្តបន្ទាប់គ្នា
     const startTime = Math.max(
-        ctx.currentTime,
-        nextPlaybackTimeRef.current
+      ctx.currentTime,
+      nextPlaybackTimeRef.current
     );
 
     source.start(startTime);
 
     nextPlaybackTimeRef.current =
-        startTime + buffer.duration;
+      startTime + buffer.duration;
+
+    source.onended = () => {
+      playingRef.current = false;
+      playNextAudio(ctx);
+    };
   };
 
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
@@ -246,11 +256,12 @@ export default function App() {
     if (duckTimeoutRef.current) clearTimeout(duckTimeoutRef.current);
     
     screenGainNodeRef.current = null;
-    nextPlaybackTimeRef.current = 0;
     
-    // កន្លែងទី៣៖ បន្ថែមការលុបទិន្នន័យ Queue មុន setConnected(false)
+    // ③ កែ stopTranslation() បន្ថែមការលុបទិន្នន័យ Queue និង queueReadyRef តាមការណែនាំថ្មី
     audioQueueRef.current = [];
     playingRef.current = false;
+    queueReadyRef.current = false;
+    nextPlaybackTimeRef.current = 0;
     
     setConnected(false);
     setLiveSubtitle("");
@@ -277,7 +288,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)BlocksBlocks។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)BlocksBlocks។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ।");
           setCaptureMode('mic');
           return;
         }
@@ -363,9 +374,12 @@ export default function App() {
           stopTranslation();
           return;
         }
+        
+        // ④ កែ msg.interrupted តាមការណែនាំថ្មី
         if (msg.interrupted) {
           audioQueueRef.current = [];
           playingRef.current = false;
+          queueReadyRef.current = false;
           nextPlaybackTimeRef.current = outputAudioCtx.currentTime;
           return;
         }
