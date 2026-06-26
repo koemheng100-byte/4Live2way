@@ -308,9 +308,6 @@ async function startServer() {
     const source = url.searchParams.get("source") || "km";
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
-    
-    const mode = url.searchParams.get("mode") || "translate"; 
-    const targetLang = url.searchParams.get("target") || "en";
 
     const startTime = Date.now(); // 🔥 គណនាម៉ោងចាប់ផ្ដើមនិយាយ
 
@@ -369,33 +366,20 @@ async function startServer() {
 
       const lang1Name = langNames[source] || source;
       const lang2Name = langNames[target] || target;
-      const learningLangName = langNames[targetLang] || targetLang;
 
-      // 👉 បង្កើតលក្ខខណ្ឌកំណត់ systemInstruction ទៅតាម Mode នៃកាប្រើប្រាស់
-      let systemInstruction = "";
+      const systemInstruction = `
+You are a strict real-time translator.
+Selected language pair: A = ${lang1Name}, B = ${lang2Name}
+Translation rules:
+1. If the input is ${lang1Name}, translate ONLY to ${lang2Name}.
+2. If the input is ${lang2Name}, translate ONLY to ${lang1Name}.
+3. Any language other than ${lang1Name} or ${lang2Name} MUST ALWAYS be translated into ${lang2Name}.
+4. Never alternate translation direction. Never infer speaker roles.
+5. Never use conversation history to decide direction. Treat every utterance independently.
+6. Translate only. Never explain, answer, summarize, or chat.
+`;
 
-      if (mode === "learning") {
-        systemInstruction = `
-    You are a strict but supportive language coach for ${learningLangName}.
-    
-    CRITICAL RULE: You MUST always output your text response as a raw JSON string. Do not wrap your response in markdown text blocks like \`\`\`json or \`\`\`. Start immediately with { and end with }.
-    
-    JSON Schema to follow every time:
-    {
-      "transcript": "Your voice response here",
-      "correction": "The correct sentence if user made a mistake, otherwise empty \\"\\"",
-      "requireRepeat": true/false
-    }
-
-    PHASE 1 (First turn only): Greet the user in Khmer warmly and ask what topic they want to practice today.
-    PHASE 2 (After user replies): Switch fully to ${learningLangName}. If they make a mistake, explain the error in Khmer, and set requireRepeat to true.
-  `;
-      } else {
-        // Mode បកប្រែដើម (Default Translation Mode)
-        systemInstruction = `You are a real-time translator specializing in converting speech between ${lang1Name} and ${lang2Name}.`;
-      }
-
-      console.log(`Live Session Active: Mode=[${mode}] Instruction Setup Completed for User: ${userId}`);
+      console.log(`Live 2-Way Interpreter Active: [${lang1Name} ↔ ${lang2Name}] for User: ${userId}`);
       
       let liveSession: any = null;
 
@@ -406,7 +390,7 @@ async function startServer() {
         clearTimeout(idleTimeoutTimer);
         idleTimeoutTimer = setTimeout(() => {
           console.log(`User ${userId} ត្រូវដាច់ដោយស្វ័យប្រវត្ត ព្រោះមិននិយាយលើសពី ២ នាទី។`);
-          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្ត" }));
+          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្តClient" }));
           clientWs.close();
         }, 120000); // ១២០,០០០ មីលីវិនាទី = ២ នាទី
       }
@@ -432,18 +416,14 @@ async function startServer() {
             }
           });
 
-          // 👉 ដំណោះស្រាយចំណុច ②៖ ប្រើទាំង AUDIO និង TEXT ប៉ុន្តែមិនដាក់ responseMimeType ក្នុង config នាំឱ្យគាំង Audio ឡើយ
-          const liveConfig: any = {
-            responseModalities: [Modality.AUDIO, Modality.TEXT],
-            outputAudioTranscription: {},
-            inputAudioTranscription: {},
-            systemInstruction,
-          };
-
-          // 👉 ដំណោះស្រាយចំណុច ④៖ ប្តូរម៉ូដែលទៅជាទម្រង់ថ្មីស្រឡាងទើបគាំទ្រមុខងារប្រសើរជាងមុន
           liveSession = await ai.live.connect({
-            model: "gemini-3.1-flash-live-preview", 
-            config: liveConfig,
+            model: "gemini-3.1-flash-live-preview",
+            config: {
+              responseModalities: [Modality.AUDIO],
+              outputAudioTranscription: {},
+              inputAudioTranscription: {},
+              systemInstruction,
+            },
             callbacks: {
               onmessage: (message: any) => {
                 if (clientWs.readyState !== clientWs.OPEN) return;
@@ -455,57 +435,18 @@ async function startServer() {
                 const outputTranscript = message.outputAudioTranscription?.text;
                 const interrupted = message.serverContent?.interrupted;
 
-                // 👉 ដំណោះស្រាយចំណុច ⑥៖ បើមានការ Interrupt ពី User ត្រូវប្រាប់ទៅ Frontend ឱ្យផ្អាកការលេងសំឡេងចាស់ភ្លាម
-                if (interrupted) {
-                  clientWs.send(JSON.stringify({ interrupted: true }));
-                }
-
-                // 👉 ដំណោះស្រាយចំណុច ③៖ Loop Parts ទាំងអស់ដើម្បីកុំឱ្យបាត់បង់ Text Stream
-                if (message.serverContent?.modelTurn?.parts) {
-                  let accumulatedText = "";
-                  for (const part of message.serverContent.modelTurn.parts) {
-                    if (part.text) {
-                      accumulatedText += part.text;
-                    }
-                  }
-
-                  if (accumulatedText) {
-                    if (mode === 'learning') {
-                      // 👉 ដំណោះស្រាយចំណុច ⑤៖ Sanitize អត្ថបទចេញពី Markdown Backticks មុនផ្ញើទៅ parse នៅ Frontend
-                      let cleanedText = accumulatedText.trim();
-                      if (cleanedText.startsWith("```json")) {
-                        cleanedText = cleanedText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-                      } else if (cleanedText.startsWith("```")) {
-                        cleanedText = cleanedText.replace(/^```\s*/, "").replace(/\s*```$/, "");
-                      }
-                      clientWs.send(JSON.stringify({ textData: cleanedText }));
-                    } else {
-                      clientWs.send(JSON.stringify({ outputTranscript: accumulatedText }));
-                    }
-                  }
-                }
-
-                if (audio || inputTranscript || outputTranscript) {
-                  clientWs.send(JSON.stringify({ audio, inputTranscript, outputTranscript }));
+                if (audio || inputTranscript || outputTranscript || interrupted) {
+                  clientWs.send(JSON.stringify({ audio, inputTranscript, outputTranscript, interrupted }));
                 }
               },
             },
           });
 
           connected = true;
-          
-          // 👉 ដំណោះស្រាយចំណុច ①៖ ផ្ញើសារដំបូងបង្កាត់ភ្លាមៗក្រោយភ្ជាប់ជោគជ័យដើម្បីដាស់ AI ឱ្យនិយាយមុន (Greet User)
-          setTimeout(() => {
-            if (liveSession && connected) {
-              liveSession.send({
-                parts: [{ text: "Hello, please start the conversation based on PHASE 1 instructions." }]
-              });
-            }
-          }, 500);
-
           break;
 
         } catch (err: any) {
+          // កែសម្រួលមិនឱ្យលាក់ Error ដើម្បីបង្ហាញមូលហេតុពិតនៅលើ Render Log
           console.error("Key failed:", err?.message || err);
         }
       }
