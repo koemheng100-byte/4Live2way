@@ -309,8 +309,8 @@ async function startServer() {
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
     
-    const mode = url.searchParams.get("mode") || "translation"; 
-    const targetLang = url.searchParams.get("targetLang") || "en";
+    const mode = url.searchParams.get("mode") || "translate"; 
+    const targetLang = url.searchParams.get("target") || "en";
 
     const startTime = Date.now(); // 🔥 គណនាម៉ោងចាប់ផ្ដើមនិយាយ
 
@@ -376,42 +376,23 @@ async function startServer() {
 
       if (mode === "learning") {
         systemInstruction = `
-You are a strict but very supportive personal language coach. 
-Your student wants to practice ${learningLangName}.
+    You are a strict but supportive language coach for ${learningLangName}.
+    
+    CRITICAL RULE: You MUST always output your text response as a valid JSON string. Do not use markdown backticks like \`\`\`json.
+    
+    JSON Schema to follow every time:
+    {
+      "transcript": "Your voice response here",
+      "correction": "The correct sentence if user made a mistake, otherwise empty \\"\\"",
+      "requireRepeat": true/false
+    }
 
-PHASE 1: THE AUDIO CHECK-IN (First Turn)
-- When the session starts, you must speak first. Greet the user warmly in Khmer.
-- Ask them what they want to talk about today (e.g., traveling, ordering food, job interview, or if they want you to choose a topic).
-- Do not speak the target language yet. Wait for their choice.
-
-PHASE 2: THE CONVERSATION & VOICE INTERRUPTION
-- Once the topic is set, speak entirely in ${learningLangName}.
-- CRITICAL RULE (INTERRUPT ON ERROR): The absolute moment you hear the user make a grammar error, sentence structure mistake, or very bad pronunciation, you MUST interrupt them immediately via voice. 
-- When you interrupt, explain the mistake kindly in Khmer, tell them the correct version, and explicitly command them to repeat after you.
-- Example: "ឈប់សិន! កន្លែងនេះខុសវេយ្យាករណ៍ហើយ ត្រូវប្រើ 'went' មិនមែន 'go' ទេ។ តោះនិយាយតាមខ្ញុំ៖ I went to school yesterday."
-
-RESPONSE FORMAT RULES:
-- For every turn in Phase 2, you MUST output your text response as a single, valid JSON string. Do not include markdown wrappers like \`\`\`json.
-- The JSON structure MUST be exactly like this:
-{
-  "transcript": "Your conversational response or your correction speech here",
-  "correction": "The exact correct sentence the user MUST repeat right now. (Leave empty \"\" if no error)",
-  "requireRepeat": true (set to true if you are correcting them and want them to repeat, false otherwise)
-}
-`;
+    PHASE 1 (First turn only): Greet the user in Khmer warmly and ask what topic they want to practice today.
+    PHASE 2 (After user replies): Switch fully to ${learningLangName}. If they make a mistake, interrupt them instantly, explain the error in Khmer, and set requireRepeat to true.
+  `;
       } else {
         // Mode បកប្រែដើម (Default Translation Mode)
-        systemInstruction = `
-You are a strict real-time translator.
-Selected language pair: A = ${lang1Name}, B = ${lang2Name}
-Translation rules:
-1. If the input is ${lang1Name}, translate ONLY to ${lang2Name}.
-2. If the input is ${lang2Name}, translate ONLY to ${lang1Name}.
-3. Any language other than ${lang1Name} or ${lang2Name} MUST ALWAYS be translated into ${lang2Name}.
-4. Never alternate translation direction. Never infer speaker roles.
-5. Never use conversation history to decide direction. Treat every utterance independently.
-6. Translate only. Never explain, answer, summarize, or chat.
-`;
+        systemInstruction = `You are a real-time translator...`;
       }
 
       console.log(`Live Session Active: Mode=[${mode}] Instruction Setup Completed for User: ${userId}`);
@@ -478,6 +459,18 @@ Translation rules:
                 const inputTranscript = message.inputAudioTranscription?.text;
                 const outputTranscript = message.outputAudioTranscription?.text;
                 const interrupted = message.serverContent?.interrupted;
+
+                // 👉 ផ្នែកចាប់យក Text Response ពី Gemini ដើម្បីផ្ញើទៅកាន់ Frontend
+                if (message.serverContent?.modelTurn?.parts?.[0]?.text) {
+                  const textResponse = message.serverContent.modelTurn.parts[0].text;
+                  
+                  if (mode === 'learning') {
+                    // ផ្ញើទៅជា textData ដើម្បីឱ្យ App.tsx ចាប់យកទៅ parse
+                    clientWs.send(JSON.stringify({ textData: textResponse }));
+                  } else {
+                    clientWs.send(JSON.stringify({ outputTranscript: textResponse }));
+                  }
+                }
 
                 if (audio || inputTranscript || outputTranscript || interrupted) {
                   clientWs.send(JSON.stringify({ audio, inputTranscript, outputTranscript, interrupted }));
