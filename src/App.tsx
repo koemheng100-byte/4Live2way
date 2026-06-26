@@ -5,18 +5,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
 
-// Optimized High-Speed PCM to Base64 Encoder
+// Optimized High-Speed PCM to Base64 Encoder (Updated for maximum performance)
 const pcmToBase64 = (pcm: Float32Array): string => {
   const bytes = new Int16Array(pcm.length);
+
   for (let i = 0; i < pcm.length; i++) {
-    bytes[i] = Math.max(-1, Math.min(1, pcm[i])) * 32367;
+    const s = Math.max(-1, Math.min(1, pcm[i]));
+    bytes[i] = s < 0 ? s * 32768 : s * 32767;
   }
+
   const uint8 = new Uint8Array(bytes.buffer);
-  let binary = '';
-  const len = uint8.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(uint8[i]);
+
+  const CHUNK = 0x8000;
+  let binary = "";
+
+  for (let i = 0; i < uint8.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(
+      null,
+      uint8.subarray(i, i + CHUNK) as unknown as number[]
+    );
   }
+
   return btoa(binary);
 };
 
@@ -148,7 +157,16 @@ export default function App() {
       playNextAudio(ctx);
     };
 
-    source.start();
+    // ✅ កែប្រែត្រង់ចំណុចនេះតាមការណែនាំដើម្បីកំណត់ពេលវេលាចាក់ផ្សាយឱ្យបន្តបន្ទាប់គ្នា
+    const startTime = Math.max(
+        ctx.currentTime,
+        nextPlaybackTimeRef.current
+    );
+
+    source.start(startTime);
+
+    nextPlaybackTimeRef.current =
+        startTime + buffer.duration;
   };
 
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
@@ -309,7 +327,6 @@ export default function App() {
         const screenGainNode = outputAudioCtx.createGain();
         screenGainNode.gain.setValueAtTime(1.0, outputAudioCtx.currentTime);
         screenOutputSource.connect(screenGainNode);
-        screenGainNode.connect(outputAudioCtx.destination);
         screenGainNodeRef.current = screenGainNode;
       }
 
@@ -347,6 +364,8 @@ export default function App() {
           return;
         }
         if (msg.interrupted) {
+          audioQueueRef.current = [];
+          playingRef.current = false;
           nextPlaybackTimeRef.current = outputAudioCtx.currentTime;
           return;
         }
