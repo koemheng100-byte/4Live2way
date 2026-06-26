@@ -40,7 +40,9 @@ export default function App() {
 
   const [liveSubtitle, setLiveSubtitle] = useState("");
   const subtitleTimeoutRef = useRef<number | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  
+  // បានប្តូរពី processorRef ទៅ workletRef តាមការណែនាំ
+  const workletRef = useRef<AudioWorkletNode | null>(null);
 
   const nextPlaybackTimeRef = useRef<number>(0);
   const screenGainNodeRef = useRef<GainNode | null>(null);
@@ -175,9 +177,10 @@ export default function App() {
       };
       ws.close();
     }
-    if (processorRef.current) {
-        processorRef.current.disconnect();
-        processorRef.current = null;
+    // បានប្តូរពី processorRef ទៅ workletRef តាមការណែនាំ
+    if (workletRef.current) {
+        workletRef.current.disconnect();
+        workletRef.current = null;
     }
     if (inputAudioCtxRef.current) {
       inputAudioCtxRef.current.close();
@@ -224,7 +227,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)Blocks។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
           setCaptureMode('mic');
           return;
         }
@@ -279,15 +282,24 @@ export default function App() {
       }
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
-      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
-      const processor = inputAudioCtx.createScriptProcessor(2048, 1, 1);
-      processorRef.current = processor;
-      inputSource.connect(processor);
-      processor.connect(inputAudioCtx.destination);
+      
+      // បានជំនួសកូដចាស់ ScriptProcessor ទៅជា AudioWorklet តាមការណែនាំ
+      await inputAudioCtx.audioWorklet.addModule("/pcm-worklet.js");
 
-      processor.onaudioprocess = (e) => {
+      const worklet = new AudioWorkletNode(
+          inputAudioCtx,
+          "pcm-processor"
+      );
+
+      workletRef.current = worklet;
+      inputSource.connect(worklet);
+
+      // បន្ថែមបន្ទាត់នេះ
+      worklet.connect(inputAudioCtx.destination);
+
+      worklet.port.onmessage = (e) => {
         if (ws.readyState === WebSocket.OPEN) {
-          const inputData = e.inputBuffer.getChannelData(0);
+          const inputData = e.data; // ទទួលបានទិន្នន័យ Float32Array ពី AudioWorklet
           const base64 = pcmToBase64(inputData);
           ws.send(JSON.stringify({ audio: base64 }));
         }
