@@ -402,7 +402,7 @@ export default function App() {
   const getLanguageLabel = (code: string) => {
     const labels: Record<string, string> = {
       km: 'ខ្មែរ (Khmer)', en: 'អង់គ្លេស (English)', zh: 'ចិន (Chinese)', 'zh-HK': 'ចិនកាតាំង (Cantonese)',
-      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរែ (Korean)', th: 'ថៃ (Thai)',
+      vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរ៉េ (Korean)', th: 'ថៃ (Thai)',
       id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡេស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
       de: 'អាល្លឺម៉ង់ (German)', no: 'ន័រវែស (Norwegian)', hi: 'ហិណ្ឌី (Hindi)', fil: 'ហ្វីលីពិន (Filipino)',
       mn: 'ម៉ុងហ្គោលី (Mongolian)', it: 'អ៊ីតាលី (Italian)', he: 'ហេប្រឺ (Hebrew)', ru: 'រុស្ស៊ី (Russian)', my: 'ភូមា (Burmese)'
