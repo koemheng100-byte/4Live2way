@@ -5,27 +5,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
 
-// Optimized High-Speed PCM to Base64 Encoder (Updated for maximum performance)
+// Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
   const bytes = new Int16Array(pcm.length);
-
   for (let i = 0; i < pcm.length; i++) {
-    const s = Math.max(-1, Math.min(1, pcm[i]));
-    bytes[i] = s < 0 ? s * 32768 : s * 32767;
+    bytes[i] = Math.max(-1, Math.min(1, pcm[i])) * 32367;
   }
-
   const uint8 = new Uint8Array(bytes.buffer);
-
-  const CHUNK = 0x8000;
-  let binary = "";
-
-  for (let i = 0; i < uint8.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(
-      null,
-      uint8.subarray(i, i + CHUNK) as unknown as number[]
-    );
+  let binary = '';
+  const len = uint8.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(uint8[i]);
   }
-
   return btoa(binary);
 };
 
@@ -49,18 +40,9 @@ export default function App() {
 
   const [liveSubtitle, setLiveSubtitle] = useState("");
   const subtitleTimeoutRef = useRef<number | null>(null);
-  
-  // បានប្តូរពី processorRef ទៅ workletRef តាមការណែនាំ
-  const workletRef = useRef<AudioWorkletNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
 
-  // ① បន្ថែម Ref ថ្មីនៅខាងលើតាមការណែនាំ
-  const audioQueueRef = useRef<AudioBuffer[]>([]);
-  const MIN_QUEUE = 4;
-  const queueReadyRef = useRef(false);
-  
-  const playingRef = useRef(false);
   const nextPlaybackTimeRef = useRef<number>(0);
-  
   const screenGainNodeRef = useRef<GainNode | null>(null);
   const duckTimeoutRef = useRef<number | null>(null);
 
@@ -139,67 +121,20 @@ export default function App() {
     return `បង់ពីថ្ងៃនេះ៖ ${start.toLocaleDateString()} -> ផុតកំណត់៖ ${end.toLocaleDateString()}`;
   };
 
-  // ② កែ playNextAudio() ជំនួស Function ទាំងមូលតាមការណែនាំថ្មី
-  const playNextAudio = (ctx: AudioContext) => {
-    if (playingRef.current) return;
-
-    if (!queueReadyRef.current) {
-      if (audioQueueRef.current.length < MIN_QUEUE) {
-        return;
-      }
-      queueReadyRef.current = true;
-    }
-
-    const buffer = audioQueueRef.current.shift();
-
-    if (!buffer) {
-      queueReadyRef.current = false;
-      return;
-    }
-
-    playingRef.current = true;
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-
-    const startTime = Math.max(
-      ctx.currentTime,
-      nextPlaybackTimeRef.current
-    );
-
-    source.start(startTime);
-
-    nextPlaybackTimeRef.current =
-      startTime + buffer.duration;
-
-    source.onended = () => {
-      playingRef.current = false;
-      playNextAudio(ctx);
-    };
-  };
+  // -------------------------------------------------------------
 
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
     const binary = atob(base64Audio);
-
     const bytes = new Uint8Array(binary.length);
-
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
     }
-
-    const buffer = ctx.createBuffer(
-        1,
-        bytes.length / 2,
-        24000
-    );
-
+    
+    const buffer = ctx.createBuffer(1, bytes.length / 2, 24000);
     const data = buffer.getChannelData(0);
-
     const view = new Int16Array(bytes.buffer);
-
     for (let i = 0; i < view.length; i++) {
-        data[i] = view[i] / 32768;
+      data[i] = view[i] / 32768;
     }
 
     if (screenGainNodeRef.current) {
@@ -214,9 +149,17 @@ export default function App() {
       }, 800);
     }
 
-    audioQueueRef.current.push(buffer);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
 
-    playNextAudio(ctx);
+    const currentTime = ctx.currentTime;
+    if (nextPlaybackTimeRef.current < currentTime) {
+      nextPlaybackTimeRef.current = currentTime + 0.02;
+    }
+
+    source.start(nextPlaybackTimeRef.current);
+    nextPlaybackTimeRef.current += buffer.duration;
   };
 
   const stopTranslation = () => {
@@ -232,10 +175,9 @@ export default function App() {
       };
       ws.close();
     }
-    // បានប្តូរពី processorRef ទៅ workletRef តាមការណែនាំ
-    if (workletRef.current) {
-        workletRef.current.disconnect();
-        workletRef.current = null;
+    if (processorRef.current) {
+        processorRef.current.disconnect();
+        processorRef.current = null;
     }
     if (inputAudioCtxRef.current) {
       inputAudioCtxRef.current.close();
@@ -256,13 +198,7 @@ export default function App() {
     if (duckTimeoutRef.current) clearTimeout(duckTimeoutRef.current);
     
     screenGainNodeRef.current = null;
-    
-    // ③ កែ stopTranslation() បន្ថែមការលុបទិន្នន័យ Queue និង queueReadyRef តាមការណែនាំថ្មី
-    audioQueueRef.current = [];
-    playingRef.current = false;
-    queueReadyRef.current = false;
     nextPlaybackTimeRef.current = 0;
-    
     setConnected(false);
     setLiveSubtitle("");
   };
@@ -288,7 +224,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)BlocksBlocks។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ।");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
           setCaptureMode('mic');
           return;
         }
@@ -338,30 +274,20 @@ export default function App() {
         const screenGainNode = outputAudioCtx.createGain();
         screenGainNode.gain.setValueAtTime(1.0, outputAudioCtx.currentTime);
         screenOutputSource.connect(screenGainNode);
+        screenGainNode.connect(outputAudioCtx.destination);
         screenGainNodeRef.current = screenGainNode;
       }
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
-      
-      // បានជំនួសកូដចាស់ ScriptProcessor ទៅជា AudioWorklet តាមការណែនាំ
-      await inputAudioCtx.audioWorklet.addModule("/pcm-worklet.js");
+      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
+      const processor = inputAudioCtx.createScriptProcessor(2048, 1, 1);
+      processorRef.current = processor;
+      inputSource.connect(processor);
+      processor.connect(inputAudioCtx.destination);
 
-      const worklet = new AudioWorkletNode(
-          inputAudioCtx,
-          "pcm-processor"
-      );
-
-      // បន្ថែម Error Handler តាមការណែនាំ
-      worklet.onprocessorerror = (err) => {
-          console.error("AudioWorklet Error", err);
-      };
-
-      workletRef.current = worklet;
-      inputSource.connect(worklet);
-
-      worklet.port.onmessage = (e) => {
+      processor.onaudioprocess = (e) => {
         if (ws.readyState === WebSocket.OPEN) {
-          const inputData = e.data; // ទទួលបានទិន្នន័យ Float32Array ពី AudioWorklet
+          const inputData = e.inputBuffer.getChannelData(0);
           const base64 = pcmToBase64(inputData);
           ws.send(JSON.stringify({ audio: base64 }));
         }
@@ -374,12 +300,7 @@ export default function App() {
           stopTranslation();
           return;
         }
-        
-        // ④ កែ msg.interrupted តាមការណែនាំថ្មី
         if (msg.interrupted) {
-          audioQueueRef.current = [];
-          playingRef.current = false;
-          queueReadyRef.current = false;
           nextPlaybackTimeRef.current = outputAudioCtx.currentTime;
           return;
         }
