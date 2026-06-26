@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useEffect, useRef, useState } from 'react';
-import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
+import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone, GraduationCap, BookOpen, Lightbulb, CheckCircle2, RotateCcw, Star } from 'lucide-react';
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -28,10 +28,14 @@ export default function App() {
   const [captureMode, setCaptureMode] = useState<'mic' | 'screen'>('mic');
   const [dubbingMode, setDubbingMode] = useState<'ducking' | 'replacement'>('ducking');
 
+  // ① បន្ថែម Mode នៅខាងលើ
+  const [appMode, setAppMode] = useState<"translate" | "learning">("translate");
+
   // State សម្រាប់ចំណាំពេលអ្នកប្រើកំពុងចុច Focus លើ Select ភាសា
   const [focusedSelect, setFocusedSelect] = useState<'source' | 'target' | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const learningWsRef = useRef<WebSocket | null>(null); // បន្ថែម Ref សម្រាប់ Learning WS
   const inputAudioCtxRef = useRef<AudioContext | null>(null);
   const outputAudioCtxRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -39,6 +43,15 @@ export default function App() {
   const [transcript, setTranscript] = useState<{original: string, translated: string}[]>([]);
 
   const [liveSubtitle, setLiveSubtitle] = useState("");
+  
+  // ② បន្ថែម Learning State
+  const [topic, setTopic] = useState("");
+  const [hint, setHint] = useState("");
+  const [correction, setCorrection] = useState("");
+  const [learningTranscript, setLearningTranscript] = useState("");
+  const [repeatText, setRepeatText] = useState("");
+  const [score, setScore] = useState<number | null>(null);
+
   const subtitleTimeoutRef = useRef<number | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
 
@@ -135,7 +148,7 @@ export default function App() {
       bytes[i] = binary.charCodeAt(i);
     }
     
-    const buffer = ctx.createBuffer(1, bytes.length / 2, 24000);
+    const buffer = ctx.createBuffer(1, bytes.length / 2, 16000); // ៣. ប្ដូរ rate មក 16000 ដូចគ្នា
     const data = buffer.getChannelData(0);
     const view = new Int16Array(bytes.buffer);
     for (let i = 0; i < view.length; i++) {
@@ -167,17 +180,13 @@ export default function App() {
     nextPlaybackTimeRef.current += buffer.duration;
   };
 
+  // ៣. ញែក stopTranslation() ចេញពីគ្នា
   const stopTranslation = () => {
-    // កែប្រែចំណុចទី ៤៖ លុបចោល Event Handlers និងបិទ WebSocket ដើម្បីកុំឱ្យវានៅបន្តស្តាប់ពេលឈប់
     if (wsRef.current) {
       wsRef.current.onmessage = null;
       wsRef.current.onopen = null;
-      
-      // កូដទី២៖ កែប្រែរបៀបបិទ WebSocket
       const ws = wsRef.current;
-      ws.onclose = () => {
-          wsRef.current = null;
-      };
+      ws.onclose = () => { wsRef.current = null; };
       ws.close();
     }
     if (processorRef.current) {
@@ -208,15 +217,44 @@ export default function App() {
     setLiveSubtitle("");
   };
 
+  // ៣. បង្កើត stopLearning() ដាច់ដោយឡែក
+  const stopLearning = () => {
+    if (learningWsRef.current) {
+      learningWsRef.current.onmessage = null;
+      learningWsRef.current.onopen = null;
+      const lws = learningWsRef.current;
+      lws.onclose = () => { learningWsRef.current = null; };
+      lws.close();
+    }
+    if (processorRef.current) {
+        processorRef.current.disconnect();
+        processorRef.current = null;
+    }
+    if (inputAudioCtxRef.current) {
+      inputAudioCtxRef.current.close();
+      inputAudioCtxRef.current = null;
+    }
+    if (outputAudioCtxRef.current) {
+      outputAudioCtxRef.current.close();
+      outputAudioCtxRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (duckTimeoutRef.current) clearTimeout(duckTimeoutRef.current);
+    
+    nextPlaybackTimeRef.current = 0;
+    setConnected(false);
+  };
+
   const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode) => {
-    // បន្ថែមលក្ខខណ្ឌ៖ បើមិនទាន់បង់ប្រាក់ មិនអនុញ្ញាតឱ្យបើកប្រព័ន្ធបកប្រែឡើយ ហើយបង្ហាញផ្ទាំងបង់ប្រាក់ភ្លាម
     if (!isPaid) {
       setPayStep(1);
       setShowPayModal(true);
       return;
     }
 
-    // កែប្រែចំណុចទី ២៖ បិទ WebSocket ចាស់ចោលសិនមុននឹងបង្កើតថ្មី ការពារការជាន់គ្នា
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -229,7 +267,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ White។");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ White成品។");
           setCaptureMode('mic');
           return;
         }
@@ -262,13 +300,11 @@ export default function App() {
       mediaStreamRef.current = audioStream;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       
-      // ផ្ញើ userId ទៅកាន់ server តាមរយៈ URL Parameter ដើម្បីផ្ទៀងផ្ទាត់ និងទាញយក API Key
       const ws = new WebSocket(
         `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&userId=${userId}`
       );
       wsRef.current = ws;
 
-      // កន្លែងទី១ និងទី៣៖ បង្កើត AudioContext និងលុប sampleRate ចេញពី outputAudioCtx ព្រមទាំងហៅប្រើ resume()
       const inputAudioCtx = new AudioContext({ latencyHint: "interactive", sampleRate: 16000 });
       const outputAudioCtx = new AudioContext({ latencyHint: "interactive" });
 
@@ -289,7 +325,6 @@ export default function App() {
       }
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
-      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
       const processor = inputAudioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
       inputSource.connect(processor);
@@ -299,7 +334,7 @@ export default function App() {
         if (ws.readyState === WebSocket.OPEN) {
           const inputData = e.inputBuffer.getChannelData(0);
           const base64 = pcmToBase64(inputData);
-          ws.send(JSON.stringify({ audio: base64 }));
+          ws.send(JSON.stringify({ audio: base64 })); // ២. Format ផ្ញើ { audio: base64 }
         }
       };
 
@@ -318,7 +353,6 @@ export default function App() {
           playAudioChunk(outputAudioCtx, msg.audio);
         }
         
-        // កែប្រែចំណុចទី ៣៖ ការពារការបង្ហាញ Transcript ជាន់គ្នា ឬទិន្នន័យដដែលៗ
         if (msg.outputTranscript && msg.outputTranscript !== lastTranscriptRef.current) {
           lastTranscriptRef.current = msg.outputTranscript;
           setLiveSubtitle(msg.outputTranscript);
@@ -338,16 +372,118 @@ export default function App() {
         setRestarting(false);
       };
       
-      // កូដទី៣៖ កែប្រែនៅក្នុង ws.onclose
       ws.onclose = () => {
           if (wsRef.current === ws) {
               wsRef.current = null;
           }
-
           setConnected(false);
       };
     } catch (err) {
       console.error("Error starting translation", err);
+      setConnected(false);
+      setRestarting(false);
+    }
+  };
+
+
+  // ③ បង្កើត Function ថ្មី startLearning() ដាច់ដោយឡែក
+  const startLearning = async () => {
+    if (!isPaid) {
+      setPayStep(1);
+      setShowPayModal(true);
+      return;
+    }
+
+    if (learningWsRef.current) {
+      learningWsRef.current.close();
+      learningWsRef.current = null;
+    }
+
+    try {
+      // សម្អាត State ចាស់ៗចោលមុនរៀន
+      setTopic("");
+      setHint("");
+      setCorrection("");
+      setRepeatText("");
+      setScore(null);
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+      mediaStreamRef.current = stream;
+
+      // ១. ប្ដូរ WebSocket URL មកកាន់ Link ត្រឹមត្រូវ មិនប្រើ location.host
+      const learningWs = new WebSocket(
+        "wss://fourlive2way.onrender.com/learning?userId=" + userId
+      );
+      learningWsRef.current = learningWs;
+
+      const inputAudioCtx = new AudioContext({ latencyHint: "interactive", sampleRate: 16000 });
+      const outputAudioCtx = new AudioContext({ latencyHint: "interactive" });
+
+      await inputAudioCtx.resume();
+      await outputAudioCtx.resume();
+
+      inputAudioCtxRef.current = inputAudioCtx;
+      outputAudioCtxRef.current = outputAudioCtx;
+      nextPlaybackTimeRef.current = 0;
+
+      const inputSource = inputAudioCtx.createMediaStreamSource(stream);
+      const processor = inputAudioCtx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+      inputSource.connect(processor);
+      processor.connect(inputAudioCtx.destination);
+
+      processor.onaudioprocess = (e) => {
+        if (learningWs.readyState === WebSocket.OPEN) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const base64 = pcmToBase64(inputData);
+          learningWs.send(JSON.stringify({ audio: base64 })); // ២. Format ផ្ញើ { audio: base64 }
+        }
+      };
+
+      // ៥. learningWs.onmessage គ្រប់គ្រង State រៀនសូត្រ តាម Format ថ្មី (៤)
+      learningWs.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.error) {
+          alert(msg.error);
+          stopLearning();
+          return;
+        }
+        
+        if (msg.topic) {
+          setTopic(msg.topic);
+        }
+        if (msg.hint) {
+          setHint(msg.hint);
+        }
+        if (msg.correction) {
+          setCorrection(msg.correction);
+        }
+        if (msg.repeat) {
+          setRepeatText(msg.repeat);
+        }
+        if (msg.score !== undefined) {
+          setScore(msg.score);
+        }
+        if (msg.audio) {
+          playAudioChunk(outputAudioCtx, msg.audio);
+        }
+      };
+
+      learningWs.onopen = () => {
+        setConnected(true);
+        setRestarting(false);
+      };
+      
+      learningWs.onclose = () => {
+          if (learningWsRef.current === learningWs) {
+              learningWsRef.current = null;
+          }
+          setConnected(false);
+      };
+    } catch (err) {
+      console.error("Error starting learning system", err);
       setConnected(false);
       setRestarting(false);
     }
@@ -358,13 +494,19 @@ export default function App() {
     setTargetLang(newTarget);
     if (connected) {
       setRestarting(true);
-      
-      // កូដទី១៖ កែប្រែ logic ការរង់ចាំ WebSocket បិទជិត (waitClose)
-      stopTranslation();
+      if (appMode === "translate") {
+        stopTranslation();
+      } else {
+        stopLearning();
+      }
 
       const waitClose = () => {
-        if (wsRef.current === null) {
-          startTranslation(newSource, newTarget, captureMode);
+        if (wsRef.current === null && learningWsRef.current === null) {
+          if (appMode === "translate") {
+            startTranslation(newSource, newTarget, captureMode);
+          } else {
+            startLearning();
+          }
         } else {
           setTimeout(waitClose, 100);
         }
@@ -388,7 +530,7 @@ export default function App() {
       stopTranslation();
 
       const waitClose = () => {
-        if (wsRef.current === null) {
+        if (wsRef.current === null && learningWsRef.current === null) {
           startTranslation(sourceLang, targetLang, mode);
         } else {
           setTimeout(waitClose, 100);
@@ -456,8 +598,26 @@ export default function App() {
           </div>
         </div>
 
+        {/* MODE TOGGLER SWITCHER */}
+        <div className="flex bg-[#171A21] p-0.5 rounded-xl border border-white/5 text-[11px]">
+          <button
+            onClick={() => { if(appMode === "translate") stopTranslation(); else stopLearning(); setAppMode("translate"); }}
+            className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${appMode === 'translate' ? 'bg-[#4F7CFF] text-white shadow-md' : 'text-[#A1A1AA] hover:text-white'}`}
+          >
+            <Languages size={12} />
+            Translate
+          </button>
+          <button
+            onClick={() => { if(appMode === "translate") stopTranslation(); else stopLearning(); setAppMode("learning"); }}
+            className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${appMode === 'learning' ? 'bg-[#4F7CFF] text-white shadow-md' : 'text-[#A1A1AA] hover:text-white'}`}
+          >
+            <GraduationCap size={12} />
+            Learn
+          </button>
+        </div>
+
         <div className="flex items-center space-x-3">
-          {captureMode === 'screen' && (
+          {captureMode === 'screen' && appMode === 'translate' && (
             <div className="flex bg-[#171A21] p-0.5 rounded-lg border border-white/5 text-[10px]">
               <button
                 onClick={() => setDubbingMode('ducking')}
@@ -474,117 +634,120 @@ export default function App() {
             </div>
           )}
 
-          <div className="flex bg-[#171A21] p-0.5 rounded-lg border border-white/5">
-            <button
-              onClick={() => handleCaptureModeChange('mic')}
-              className={`p-1 rounded-md transition-all ${captureMode === 'mic' ? 'bg-[#4F7CFF] text-white' : 'text-[#A1A1AA]'}`}
-              title="Microphone"
-            >
-              <Mic size={14} />
-            </button>
-            <button
-              onClick={() => handleCaptureModeChange('screen')}
-              className={`p-1 rounded-md transition-all ${captureMode === 'screen' ? 'bg-[#4F7CFF] text-white' : 'text-[#A1A1AA]'}`}
-              title="System Audio"
-            >
-              <Monitor size={14} />
-            </button>
-          </div>
+          {appMode === 'translate' && (
+            <div className="flex bg-[#171A21] p-0.5 rounded-lg border border-white/5">
+              <button
+                onClick={() => handleCaptureModeChange('mic')}
+                className={`p-1 rounded-md transition-all ${captureMode === 'mic' ? 'bg-[#4F7CFF] text-white' : 'text-[#A1A1AA]'}`}
+                title="Microphone"
+              >
+                <Mic size={14} />
+              </button>
+              <button
+                onClick={() => handleCaptureModeChange('screen')}
+                className={`p-1 rounded-md transition-all ${captureMode === 'screen' ? 'bg-[#4F7CFF] text-white' : 'text-[#A1A1AA]'}`}
+                title="System Audio"
+              >
+                <Monitor size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       {/* MAIN LAYOUT */}
       <main className="flex-1 max-w-md w-full mx-auto flex flex-col p-5 overflow-hidden relative justify-start">
         
-        {/* LANGUAGE SELECTOR */}
-        <div className="w-full flex items-center justify-center space-x-2 bg-white/5 border border-white/10 backdrop-blur-xl rounded-full p-1 shadow-sm mb-4">
-          
-          {/* SOURCE LANGUAGE SELECT */}
-          <div className={`flex-1 relative flex justify-center rounded-full transition-all duration-200 ${
-            focusedSelect === 'source' ? 'bg-white/10 ring-1 ring-[#4F7CFF]/50' : 'hover:bg-white/5'
-          }`}>
-            <span className="text-xs font-semibold px-4 py-1.5 text-white text-center block truncate max-w-[140px]">
-              {getLanguageLabel(sourceLang)}
-            </span>
-            <select
-              className="absolute inset-0 opacity-0 w-full cursor-pointer bg-[#171A21] text-white"
-              value={sourceLang}
-              onFocus={() => setFocusedSelect('source')}
-              onBlur={() => setFocusedSelect(null)}
-              onChange={(e) => {
-                changeLanguages(e.target.value, targetLang);
-                e.target.blur();
-              }}
-            >
-              <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
-              <option value="en" className="bg-[#171A21] text-white">អង់គ្លេស (English)</option>
-              <option value="zh" className="bg-[#171A21] text-white">ចិន (Chinese)</option>
-              <option value="zh-HK" className="bg-[#171A21] text-white">ចិនកាតាំង (Cantonese)</option>
-              <option value="vi" className="bg-[#171A21] text-white">វៀតណាម (Vietnamese)</option>
-              <option value="ja" className="bg-[#171A21] text-white">ជប៉ុន (Japanese)</option>
-              <option value="ko" className="bg-[#171A21] text-white">កូរ៉េ (Korean)</option>
-              <option value="th" className="bg-[#171A21] text-white">ថៃ (Thai)</option>
-              <option value="id" className="bg-[#171A21] text-white">ឥណ្ឌូនេស៊ី (Indonesian)</option>
-              <option value="ms" className="bg-[#171A21] text-white">ម៉ាឡេស៊ី (Malay)</option>
-              <option value="lo" className="bg-[#171A21] text-white">ឡាវ (Lao)</option>
-              <option value="fr" className="bg-[#171A21] text-white">បារាំង (French)</option>
-              <option value="de" className="bg-[#171A21] text-white">អាល្លឺម៉ង់ (German)</option>
-              <option value="no" className="bg-[#171A21] text-white">ន័រវែស (Norwegian)</option>
-              <option value="hi" className="bg-[#171A21] text-white">ឥណ្ឌា (Hindi)</option>
-              <option value="fil" className="bg-[#171A21] text-white">ហ្វីលីពិន (Filipino)</option>
-              <option value="mn" className="bg-[#171A21] text-white">ម៉ុងហ្គោលី (Mongolian)</option>
-              <option value="it" className="bg-[#171A21] text-white">អ៊ីតាលី (Italian)</option>
-              <option value="he" className="bg-[#171A21] text-white">អ៊ីស្រាអែល (Hebrew)</option>
-              <option value="ru" className="bg-[#171A21] text-white">រុស្ស៊ី (Russian)</option>
-              <option value="my" className="bg-[#171A21] text-white">ភូមា (Burmese)</option>
-            </select>
-          </div>
-          
-          <div className="text-[#A1A1AA] p-1 bg-[#171A21] rounded-full border border-white/5 flex-shrink-0">
-            <ArrowLeftRight size={12} />
-          </div>
+        {/* LANGUAGE SELECTOR (លាក់ពេលកំពុងស្ថិតក្នុង Learning Mode) */}
+        {appMode === 'translate' && (
+          <div className="w-full flex items-center justify-center space-x-2 bg-white/5 border border-white/10 backdrop-blur-xl rounded-full p-1 shadow-sm mb-4">
+            {/* SOURCE LANGUAGE SELECT */}
+            <div className={`flex-1 relative flex justify-center rounded-full transition-all duration-200 ${
+              focusedSelect === 'source' ? 'bg-white/10 ring-1 ring-[#4F7CFF]/50' : 'hover:bg-white/5'
+            }`}>
+              <span className="text-xs font-semibold px-4 py-1.5 text-white text-center block truncate max-w-[140px]">
+                {getLanguageLabel(sourceLang)}
+              </span>
+              <select
+                className="absolute inset-0 opacity-0 w-full cursor-pointer bg-[#171A21] text-white"
+                value={sourceLang}
+                onFocus={() => setFocusedSelect('source')}
+                onBlur={() => setFocusedSelect(null)}
+                onChange={(e) => {
+                  changeLanguages(e.target.value, targetLang);
+                  e.target.blur();
+                }}
+              >
+                <option value="km">ខ្មែរ (Khmer)</option>
+                <option value="en">អង់គ្លេស (English)</option>
+                <option value="zh">ចិន (Chinese)</option>
+                <option value="zh-HK">ចិនកាតាំង (Cantonese)</option>
+                <option value="vi">វៀតណាម (Vietnamese)</option>
+                <option value="ja">ជប៉ុន (Japanese)</option>
+                <option value="ko">កូរ៉េ (Korean)</option>
+                <option value="th">ថៃ (Thai)</option>
+                <option value="id">ឥណ្ឌូនេស៊ី (Indonesian)</option>
+                <option value="ms">ម៉ាឡេស៊ី (Malay)</option>
+                <option value="lo">ឡាវ (Lao)</option>
+                <option value="fr">បារាំង (French)</option>
+                <option value="de">អាល្លឺម៉ង់ (German)</option>
+                <option value="no">ន័រវែស (Norwegian)</option>
+                <option value="hi">ឥណ្ឌា (Hindi)</option>
+                <option value="fil">ហ្វីលីពិន (Filipino)</option>
+                <option value="mn">ម៉ុងហ្គោលី (Mongolian)</option>
+                <option value="it">អ៊ីតាលី (Italian)</option>
+                <option value="he">អ៊ីស្រាអែល (Hebrew)</option>
+                <option value="ru">រុស្ស៊ី (Russian)</option>
+                <option value="my">ភូមា (Burmese)</option>
+              </select>
+            </div>
+            
+            <div className="text-[#A1A1AA] p-1 bg-[#171A21] rounded-full border border-white/5 flex-shrink-0">
+              <ArrowLeftRight size={12} />
+            </div>
 
-          {/* TARGET LANGUAGE SELECT */}
-          <div className={`flex-1 relative flex justify-center rounded-full transition-all duration-200 ${
-            focusedSelect === 'target' ? 'bg-white/10 ring-1 ring-[#4F7CFF]/50' : 'hover:bg-white/5'
-          }`}>
-            <span className="text-xs font-semibold px-4 py-1.5 text-white text-center block truncate max-w-[140px]">
-              {getLanguageLabel(targetLang)}
-            </span>
-            <select
-              className="absolute inset-0 opacity-0 w-full cursor-pointer bg-[#171A21] text-white"
-              value={targetLang}
-              onFocus={() => setFocusedSelect('target')}
-              onBlur={() => setFocusedSelect(null)}
-              onChange={(e) => {
-                changeLanguages(sourceLang, e.target.value);
-                e.target.blur();
-              }}
-            >
-              <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
-              <option value="en" className="bg-[#171A21] text-white">អង់គ្លេស (English)</option>
-              <option value="zh" className="bg-[#171A21] text-white">ចិន (Chinese)</option>
-              <option value="zh-HK" className="bg-[#171A21] text-white">ចិនកាតាំង (Cantonese)</option>
-              <option value="vi" className="bg-[#171A21] text-white">វៀតណាម (Vietnamese)</option>
-              <option value="ja" className="bg-[#171A21] text-white">ជប៉ុន (Japanese)</option>
-              <option value="ko" className="bg-[#171A21] text-white">កូរ៉េ (Korean)</option>
-              <option value="th" className="bg-[#171A21] text-white">ថៃ (Thai)</option>
-              <option value="id" className="bg-[#171A21] text-white">ឥណ្ឌូនេស៊ី (Indonesian)</option>
-              <option value="ms" className="bg-[#171A21] text-white">ម៉ាឡេស៊ី (Malay)</option>
-              <option value="lo" className="bg-[#171A21] text-white">ឡាវ (Lao)</option>
-              <option value="fr" className="bg-[#171A21] text-white">បារាំង (French)</option>
-              <option value="de" className="bg-[#171A21] text-white">អាល្លឺម៉ង់ (German)</option>
-              <option value="no" className="bg-[#171A21] text-white">ន័រវែស (Norwegian)</option>
-              <option value="hi" className="bg-[#171A21] text-white">ឥណ្ឌា (Hindi)</option>
-              <option value="fil" className="bg-[#171A21] text-white">ហ្វីលីពិន (Filipino)</option>
-              <option value="mn" className="bg-[#171A21] text-white">ម៉ុងហ្គោលី (Mongolian)</option>
-              <option value="it" className="bg-[#171A21] text-white">អ៊ីតាលី (Italian)</option>
-              <option value="he" className="bg-[#171A21] text-white">អ៊ីស្រាអែល (Hebrew)</option>
-              <option value="ru" className="bg-[#171A21] text-white">រុស្ស៊ី (Russian)</option>
-              <option value="my" className="bg-[#171A21] text-white">ភូមា (Burmese)</option>
-            </select>
+            {/* TARGET LANGUAGE SELECT */}
+            <div className={`flex-1 relative flex justify-center rounded-full transition-all duration-200 ${
+              focusedSelect === 'target' ? 'bg-white/10 ring-1 ring-[#4F7CFF]/50' : 'hover:bg-white/5'
+            }`}>
+              <span className="text-xs font-semibold px-4 py-1.5 text-white text-center block truncate max-w-[140px]">
+                {getLanguageLabel(targetLang)}
+              </span>
+              <select
+                className="absolute inset-0 opacity-0 w-full cursor-pointer bg-[#171A21] text-white"
+                value={targetLang}
+                onFocus={() => setFocusedSelect('target')}
+                onBlur={() => setFocusedSelect(null)}
+                onChange={(e) => {
+                  changeLanguages(sourceLang, e.target.value);
+                  e.target.blur();
+                }}
+              >
+                <option value="km">ខ្មែរ (Khmer)</option>
+                <option value="en">អង់គ្លេស (English)</option>
+                <option value="zh">ចិន (Chinese)</option>
+                <option value="zh-HK">ចិនកាតាំង (Cantonese)</option>
+                <option value="vi">វៀតណាម (Vietnamese)</option>
+                <option value="ja">ជប៉ុន (Japanese)</option>
+                <option value="ko">កូរ៉េ (Korean)</option>
+                <option value="th">ថៃ (Thai)</option>
+                <option value="id">ឥណ្ឌូនេស៊ី (Indonesian)</option>
+                <option value="ms">ម៉ាឡស៊ី (Malay)</option>
+                <option value="lo">ឡាវ (Lao)</option>
+                <option value="fr">បារាំង (French)</option>
+                <option value="de">អាល្លឺម៉ង់ (German)</option>
+                <option value="no">ន័រវែស (Norwegian)</option>
+                <option value="hi">ឥណ្ឌា (Hindi)</option>
+                <option value="fil">ហ្វីលីពិន (Filipino)</option>
+                <option value="mn">ម៉ុងហ្គោលី (Mongolian)</option>
+                <option value="it">អ៊ីតាលី (Italian)</option>
+                <option value="he">អ៊ីស្រាអែល (Hebrew)</option>
+                <option value="ru">រុស្ស៊ី (Russian)</option>
+                <option value="my">ភូមា (Burmese)</option>
+              </select>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ROBOT HEAD UI SECTION */}
         <div className="flex flex-col items-center justify-center pt-2 pb-4">
@@ -620,29 +783,86 @@ export default function App() {
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-400 max-w-[260px] leading-relaxed mt-3">
+            <p className="text-[11px] text-slate-400 max-w-[260px] leading-relaxed mt-3 text-center">
               {restarting
                 ? "កំពុងអនុវត្តភាសាថ្មី..."
                 : connected 
-                ? "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ"
-                : "សូមចុចប៊ូតុង Live Translator ដើម្បីចាប់ផ្តើមបកប្រែ"
+                ? (appMode === "translate" ? "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ" : "កំពុងដំណើរការរៀនសូត្រ... សូមនិយាយជាភាសាអង់គ្លេស")
+                : (appMode === "translate" ? "សូមចុចប៊ូតុង Live Translator ដើម្បីចាប់ផ្តើមបកប្រែ" : "សូមចុចប៊ូតុង Learn Language ដើម្បីចាប់ផ្ដើមអនុវត្ត")
               }
             </p>
           </div>
         </div>
 
-        {/* CONVERSATION BUBBLES CONTAINER */}
-        <div className="flex-1 w-full my-1 overflow-y-auto max-h-[100px] space-y-2 pr-1 scrollbar-none flex flex-col justify-end">
-          {transcript.slice(-2).map((item, i) => (
-            <div key={i} className="space-y-1 animate-fadeIn max-w-[90%] mx-auto w-full">
-              <div className="bg-[#111625] border border-white/5 rounded-xl p-2.5 shadow-sm text-center">
-                <p className="text-xs text-[#4F7CFF] font-semibold">{item.translated}</p>
+        {/* ⑥ UI CARD sections សម្រាប់ LEARNING MODE (បង្ហាញក្រោម Robot ពេលស្ថិតក្នុង Learning Mode) */}
+        {appMode === "learning" && (
+          <div className="w-full space-y-3 mb-2 overflow-y-auto max-h-[220px] pr-1 scrollbar-none">
+            {/* Topic Card */}
+            {topic && (
+              <div className="bg-gradient-to-r from-blue-600/20 to-indigo-600/10 border border-blue-500/30 rounded-2xl p-3 shadow-md animate-fadeIn">
+                <div className="flex items-center gap-2 text-blue-400 font-bold text-xs mb-1 uppercase tracking-wider">
+                  <BookOpen size={14} /> Topic
+                </div>
+                <p className="text-sm font-semibold text-white">{topic}</p>
               </div>
-            </div>
-          ))}
-        </div>
+            )}
 
-        {/* LOWER CENTER: LIVE TRANSLATOR PREMIUM CIRCULAR ORB */}
+            {/* Hint Card */}
+            {hint && (
+              <div className="bg-gradient-to-r from-amber-600/15 to-amber-500/5 border border-amber-500/20 rounded-2xl p-3 shadow-md animate-fadeIn">
+                <div className="flex items-center gap-2 text-amber-400 font-bold text-xs mb-1 uppercase tracking-wider">
+                  <Lightbulb size={14} /> Hint / គន្លឹះណែនាំ
+                </div>
+                <div className="text-xs text-slate-200 font-medium whitespace-pre-line leading-relaxed pl-1">
+                  {hint}
+                </div>
+              </div>
+            )}
+
+            {/* Correction Card */}
+            {correction && (
+              <div className="bg-gradient-to-r from-emerald-600/20 to-teal-600/10 border border-emerald-500/30 rounded-2xl p-3 shadow-md animate-fadeIn">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-1 uppercase tracking-wider">
+                  <CheckCircle2 size={14} /> Correction / កែលម្អប្រយោគ
+                </div>
+                <p className="text-xs font-semibold text-emerald-100 bg-emerald-950/40 p-2 rounded-xl border border-emerald-500/10">{correction}</p>
+              </div>
+            )}
+
+            {/* Repeat Card */}
+            {repeatText && (
+              <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/10 border border-purple-500/30 rounded-2xl p-3 shadow-md animate-fadeIn">
+                <div className="flex items-center gap-2 text-purple-400 font-bold text-xs mb-1 uppercase tracking-wider">
+                  <RotateCcw size={14} /> Repeat / ថាមកវិញ
+                </div>
+                <p className="text-xs text-purple-100 font-medium italic">{repeatText}</p>
+              </div>
+            )}
+
+            {/* Score Badge */}
+            {score !== null && (
+              <div className="flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/40 rounded-full py-1.5 px-4 w-fit mx-auto animate-fadeIn shadow-lg">
+                <Star size={14} className="text-yellow-400 fill-yellow-400" />
+                <span className="text-xs font-bold text-yellow-300">ពិន្ទុបញ្ចេញសំឡេង៖ <span className="text-sm font-black text-white font-mono">{score}</span> / 100</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CONVERSATION BUBBLES CONTAINER (បង្ហាញតែក្នុង Translate Mode) */}
+        {appMode === "translate" && (
+          <div className="flex-1 w-full my-1 overflow-y-auto max-h-[100px] space-y-2 pr-1 scrollbar-none flex flex-col justify-end">
+            {transcript.slice(-2).map((item, i) => (
+              <div key={i} className="space-y-1 animate-fadeIn max-w-[90%] mx-auto w-full">
+                <div className="bg-[#111625] border border-white/5 rounded-xl p-2.5 shadow-sm text-center">
+                  <p className="text-xs text-[#4F7CFF] font-semibold">{item.translated}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* LOWER CENTER: MAIN BUTTON CONTROL ORB (DYNAMIC ACTIONS) */}
         <div className="w-full flex justify-center items-center pt-4 pb-[130px] relative">
           {connected && (
             <>
@@ -667,7 +887,7 @@ export default function App() {
               <div className="absolute -inset-4 rounded-full border border-red-600/20 animate-ping opacity-40" style={{ animationDuration: '2.5s' }} />
 
               <button 
-                onClick={stopTranslation}
+                onClick={appMode === "translate" ? stopTranslation : stopLearning}
                 className="
                   w-[140px] h-[140px] md:w-[180px] md:h-[180px]
                   rounded-full
@@ -680,9 +900,11 @@ export default function App() {
                   flex flex-col items-center justify-center select-none p-2
                 "
               >
-                <Languages size={24} className="mb-1 text-red-100 md:w-7 md:h-7 drop-shadow-md" />
+                {appMode === "translate" ? <Languages size={24} className="mb-1 text-red-100 md:w-7 md:h-7 drop-shadow-md" /> : <GraduationCap size={24} className="mb-1 text-red-100 md:w-7 md:h-7 drop-shadow-md" />}
                 <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-red-100/90 leading-tight">Stop</span>
-                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
+                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">
+                  {appMode === "translate" ? "Translator" : "Learning"}
+                </span>
               </button>
             </div>
           ) : (
@@ -694,7 +916,11 @@ export default function App() {
                 disabled={restarting}
                 onClick={() => {
                   if (!restarting) {
-                    startTranslation(sourceLang, targetLang, captureMode);
+                    if (appMode === "translate") {
+                      startTranslation(sourceLang, targetLang, captureMode);
+                    } else {
+                      startLearning();
+                    }
                   }
                 }}
                 className="
@@ -711,16 +937,25 @@ export default function App() {
                   disabled:opacity-80 disabled:cursor-not-allowed
                 "
               >
-                <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                {appMode === "translate" ? (
+                  <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                ) : (
+                  <GraduationCap size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                )}
+                
                 {restarting ? (
                   <>
                     <span className="text-[11px] text-cyan-100">Applying</span>
-                    <span className="text-sm font-bold text-white">New Language...</span>
+                    <span className="text-sm font-bold text-white">New State...</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">Live</span>
-                    <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
+                    <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">
+                      {appMode === "translate" ? "Live" : "Learn"}
+                    </span>
+                    <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">
+                      {appMode === "translate" ? "Translator" : "Language"}
+                    </span>
                   </>
                 )}
               </button>
@@ -729,21 +964,20 @@ export default function App() {
         </div>
       </main>
 
-      {/* FLOATING SUBTITLE OVERLAY */}
-      {liveSubtitle && (
+      {/* FLOATING SUBTITLE OVERLAY (បង្ហាញតែក្នុង Translate Mode) */}
+      {liveSubtitle && appMode === "translate" && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-black/70 border border-white/10 backdrop-blur-xl text-white text-base font-semibold text-center max-w-[85%] shadow-2xl pointer-events-none animate-fadeIn">
           {liveSubtitle}
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* ផ្ទាំង PREMIUM POPUP MODAL (លេចឡើងដោយមិនប៉ះពាល់ដល់ UI ចាស់ សម្រាប់បង់ប្រាក់) */}
+      {/* ផ្ទាំង PREMIUM POPUP MODAL */}
       {/* ========================================================================= */}
       {showPayModal && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-[#111625] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center relative shadow-2xl">
             
-            {/* ប៊ូតុងខ្វែងបិទ [X] លេចឡើងតែនៅជំហានទី 1 និងនៅជំហានទី 4 */}
             {(payStep === 1 || payStep === 4) && (
               <button 
                 onClick={() => setShowPayModal(false)} 
@@ -753,7 +987,7 @@ export default function App() {
               </button>
             )}
 
-            {/* ជំហានទី ១៖ បង្ហាញ ID និងស្ថានភាពរួមទាំងប៊ូតុងបង់ប្រាក់ */}
+            {/* ជំហានទី ១ */}
             {payStep === 1 && (
               <div>
                 <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3 border border-[#4F7CFF]/30">
@@ -785,7 +1019,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ជំហានទី ២៖ ជ្រើសរើសរយៈពេលប្រើប្រាស់ */}
+            {/* ជំហានទី ២ */}
             {payStep === 2 && (
               <div>
                 <h3 className="text-base font-bold text-white mb-1">ជ្រើសរើសរយៈពេលប្រើប្រាស់</h3>
@@ -819,7 +1053,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ជំហានទី ៣៖ បង្ហាញរូបភាព QR Code ពិតប្រាកដរបស់ធនាគារ */}
+            {/* ជំហានទី ៣ */}
             {payStep === 3 && selectedPlan && (
               <div>
                 <h3 className="text-base font-bold text-white mb-1">ស្កេនទូទាត់ប្រាក់ {selectedPlan.price}</h3>
@@ -827,7 +1061,6 @@ export default function App() {
                   {calculateDatesText(selectedPlan.days)}
                 </p>
 
-                {/* ប៊ូតុងរើសធនាគារដើម្បីផ្លាស់ប្តូរការបង្ហាញរូបភាព QR ជាក់លាក់ */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button 
                     onClick={() => setActiveBank('aba')}
@@ -851,16 +1084,12 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* ✅ កូដបង្ហាញរូបភាព QR ពិតប្រាកដរបស់អ្នក (ដោះស្រាយបញ្ហាស្កេនមិនស្គាល់) */}
                 <div className="bg-white p-2 rounded-2xl max-w-[280px] mx-auto mb-3 shadow-md overflow-hidden flex items-center justify-center">
                   <img 
-                    src={activeBank === 'aba' 
-                      ? "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR ABA របស់បង
-                      : "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR Acleda របស់បង
-                    } 
+                    src="https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" 
                     alt="Payment QR Code" 
                     className="w-full h-auto object-contain rounded-xl mx-auto"
-                    style={{ maxHeight: '360px' }} // កំណត់កម្ពស់ឱ្យវែងសមល្មមនឹងរូបរាង QR ដើមរបស់ធនាគារខ្មែរ
+                    style={{ maxHeight: '360px' }}
                   />
                 </div>
 
@@ -877,7 +1106,6 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => {
-                      // បង្កើតសារអត្ថបទអូតូដើម្បីផ្ញើទៅកាន់ Telegram តាមការចង់បានរបស់អ្នក
                       const message = encodeURIComponent(`
 🆔 ID ម៉ាស៊ីន៖ ${userId}
 📦 កញ្ចប់ជ្រើសរើស៖ ${selectedPlan.name}
@@ -886,12 +1114,7 @@ export default function App() {
 
 👉 សូមចុច ផ្ញើ បន្ទាប់មកថតវិក័យប័ត្របង់ប្រាក់ផ្ញើមកម្ដងទៀត។
 `);
-                      
-                      // រក្សារចនាសម្ព័ន្ធ window.open ដដែល
-                      window.open(
-                        `https://t.me/hengheng56?text=${message}`,
-                        "_blank"
-                      );
+                      window.open(`https://t.me/hengheng56?text=${message}`, "_blank");
                     }} 
                     className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
                   >
@@ -901,13 +1124,13 @@ export default function App() {
               </div>
             )}
 
-            {/* ជំហានទី ៤៖ ផ្ទាំង Pop up បន្ថែមស្រេចចិត្ត ឱ្យវាយលេខទូរសព្ទភ្ជាប់ជាមួយ ID */}
+            {/* ជំហានទី ៤ */}
             {payStep === 4 && (
               <div>
                 <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3">
                   <Phone size={20} />
                 </div>
-                <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រស្រចិត្ត)</h3>
+                <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រេចចិត្ត)</h3>
                 <p className="text-xs text-slate-400 mb-4 leading-relaxed">
                   ងាយស្រួលសម្រាប់ការផ្ទៀងផ្ទាត់ និងជួយសម្រួលពេលមានបញ្ហា។ អ្នកអាចខ្វែងចោល [✕] ក៏បាន។
                 </p>
