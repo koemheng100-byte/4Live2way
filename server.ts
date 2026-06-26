@@ -417,7 +417,7 @@ Translation rules:
           });
 
           liveSession = await ai.live.connect({
-            model: "gemini-2.5-flash-preview-09-2025",
+            model: "gemini-2.5-flash",
             config: {
               responseModalities: [Modality.AUDIO],
               outputAudioTranscription: {},
