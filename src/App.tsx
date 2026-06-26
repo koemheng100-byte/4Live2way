@@ -44,7 +44,11 @@ export default function App() {
   // បានប្តូរពី processorRef ទៅ workletRef តាមការណែនាំ
   const workletRef = useRef<AudioWorkletNode | null>(null);
 
+  // កន្លែងទី១៖ បន្ថែម Ref ថ្មីពីរនៅខាងលើ nextPlaybackTimeRef
+  const audioQueueRef = useRef<AudioBuffer[]>([]);
+  const playingRef = useRef(false);
   const nextPlaybackTimeRef = useRef<number>(0);
+  
   const screenGainNodeRef = useRef<GainNode | null>(null);
   const duckTimeoutRef = useRef<number | null>(null);
 
@@ -125,18 +129,49 @@ export default function App() {
 
   // -------------------------------------------------------------
 
+  // កន្លែងទី២៖ ជំនួស Function playAudioChunk() ទាំងមូល និងបន្ថែម playNextAudio
+  const playNextAudio = (ctx: AudioContext) => {
+    if (playingRef.current) return;
+
+    const buffer = audioQueueRef.current.shift();
+
+    if (!buffer) return;
+
+    playingRef.current = true;
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+
+    source.onended = () => {
+      playingRef.current = false;
+      playNextAudio(ctx);
+    };
+
+    source.start();
+  };
+
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
     const binary = atob(base64Audio);
+
     const bytes = new Uint8Array(binary.length);
+
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
     }
-    
-    const buffer = ctx.createBuffer(1, bytes.length / 2, 24000);
+
+    const buffer = ctx.createBuffer(
+        1,
+        bytes.length / 2,
+        24000
+    );
+
     const data = buffer.getChannelData(0);
+
     const view = new Int16Array(bytes.buffer);
+
     for (let i = 0; i < view.length; i++) {
-      data[i] = view[i] / 32768;
+        data[i] = view[i] / 32768;
     }
 
     if (screenGainNodeRef.current) {
@@ -151,17 +186,9 @@ export default function App() {
       }, 800);
     }
 
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
+    audioQueueRef.current.push(buffer);
 
-    const currentTime = ctx.currentTime;
-    if (nextPlaybackTimeRef.current < currentTime) {
-      nextPlaybackTimeRef.current = currentTime + 0.02;
-    }
-
-    source.start(nextPlaybackTimeRef.current);
-    nextPlaybackTimeRef.current += buffer.duration;
+    playNextAudio(ctx);
   };
 
   const stopTranslation = () => {
@@ -202,6 +229,11 @@ export default function App() {
     
     screenGainNodeRef.current = null;
     nextPlaybackTimeRef.current = 0;
+    
+    // កន្លែងទី៣៖ បន្ថែមការលុបទិន្នន័យ Queue មុន setConnected(false)
+    audioQueueRef.current = [];
+    playingRef.current = false;
+    
     setConnected(false);
     setLiveSubtitle("");
   };
@@ -227,7 +259,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)Blocks។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)BlocksBlocks។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ។");
           setCaptureMode('mic');
           return;
         }
