@@ -291,11 +291,13 @@ export default function App() {
           "pcm-processor"
       );
 
+      // បន្ថែម Error Handler តាមការណែនាំ
+      worklet.onprocessorerror = (err) => {
+          console.error("AudioWorklet Error", err);
+      };
+
       workletRef.current = worklet;
       inputSource.connect(worklet);
-
-      // បន្ថែមបន្ទាត់នេះ
-      worklet.connect(inputAudioCtx.destination);
 
       worklet.port.onmessage = (e) => {
         if (ws.readyState === WebSocket.OPEN) {
