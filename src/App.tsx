@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useEffect, useRef, useState } from 'react';
-import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone } from 'lucide-react';
+import { Mic, Monitor, Languages, ArrowLeftRight, Copy, Check, Phone, GraduationCap } from 'lucide-react';
 
 // Optimized High-Speed PCM to Base64 Encoder
 const pcmToBase64 = (pcm: Float32Array): string => {
@@ -28,7 +28,9 @@ export default function App() {
   const [captureMode, setCaptureMode] = useState<'mic' | 'screen'>('mic');
   const [dubbingMode, setDubbingMode] = useState<'ducking' | 'replacement'>('ducking');
 
-  // State សម្រាប់ចំណាំពេលអ្នកប្រើកំពុងចុច Focus លើ Select ភាសា
+  // New State សម្រាប់បែងចែក Mode បកប្រែធម្មតា និង Mode រៀនភាសា
+  const [appMode, setAppMode] = useState<'translation' | 'learning'>('translation');
+
   const [focusedSelect, setFocusedSelect] = useState<'source' | 'target' | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -46,25 +48,22 @@ export default function App() {
   const screenGainNodeRef = useRef<GainNode | null>(null);
   const duckTimeoutRef = useRef<number | null>(null);
 
-  // កែប្រែចំណុចទី ៣៖ បន្ថែម lastTranscriptRef ដើម្បីការពារការស្ទួនទិន្នន័យអត្ថបទ
   const lastTranscriptRef = useRef("");
 
-  // --- STATE បន្ថែមថ្មី សម្រាប់ប្រព័ន្ធគ្រប់គ្រងការបង់ប្រាក់ និង NO-AUTH ID ---
+  // --- STATE សម្រាប់ប្រព័ន្ធគ្រប់គ្រងការបង់ប្រាក់ ---
   const [userId, setUserId] = useState<string>("");
-  const [isPaid, setIsPaid] = useState<boolean>(true); // សន្មតថាតានដានស្ថានភាពជាមុនសិន
+  const [isPaid, setIsPaid] = useState<boolean>(true); 
   const [showPayModal, setShowPayModal] = useState<boolean>(false);
-  const [payStep, setPayStep] = useState<number>(1); // 1: បង្ហាញ ID, 2: ជ្រើសរើសរយៈពេល, 3: ជ្រើសរើសធនាគារ/QR, 4: ដាក់លេខទូរសព្ទ
+  const [payStep, setPayStep] = useState<number>(1); 
   const [selectedPlan, setSelectedPlan] = useState<{ name: string; price: string; days: number } | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [inputPhone, setInputPhone] = useState<string>("");
   const [expiryText, setExpiryText] = useState<string>("");
-  const [activeBank, setActiveBank] = useState<'aba' | 'acleda'>('aba'); // ចំណាំធនាគារដែលកំពុងជ្រើសរើស
+  const [activeBank, setActiveBank] = useState<'aba' | 'acleda'>('aba'); 
 
-  // ១. បង្កើត ID ម៉ាស៊ីន និងឆែកស្ថានភាពបង់ប្រាក់ពេលបើកកម្មវិធីភ្លាម
   useEffect(() => {
     let localId = localStorage.getItem("user_machine_id");
     if (!localId) {
-      // បង្កើត ID គំរូថ្មីមួយដោយស្វ័យប្រវត្តិ (ឧទហរណ៍៖ L2W-XXXXXX)
       localId = "L2W-" + Math.floor(100000 + Math.random() * 900000);
       localStorage.setItem("user_machine_id", localId);
     }
@@ -121,9 +120,6 @@ export default function App() {
     return `បង់ពីថ្ងៃនេះ៖ ${start.toLocaleDateString()} -> ផុតកំណត់៖ ${end.toLocaleDateString()}`;
   };
 
-  // -------------------------------------------------------------
-
-  // កន្លែងទី២៖ កែប្រែ playAudioChunk ដើម្បីដាស់ AudioContext ដែល suspended លើ Safari/iOS
   const playAudioChunk = (ctx: AudioContext, base64Audio: string) => {
     if (ctx.state === "suspended") {
       ctx.resume();
@@ -168,12 +164,10 @@ export default function App() {
   };
 
   const stopTranslation = () => {
-    // កែប្រែចំណុចទី ៤៖ លុបចោល Event Handlers និងបិទ WebSocket ដើម្បីកុំឱ្យវានៅបន្តស្តាប់ពេលឈប់
     if (wsRef.current) {
       wsRef.current.onmessage = null;
       wsRef.current.onopen = null;
       
-      // កូដទី២៖ កែប្រែរបៀបបិទ WebSocket
       const ws = wsRef.current;
       ws.onclose = () => {
           wsRef.current = null;
@@ -198,7 +192,7 @@ export default function App() {
     }
     if (displayStreamRef.current) {
       displayStreamRef.current.getTracks().forEach(track => track.stop());
-      displayStreamRef.current = null;
+      mediaStreamRef.current = null;
     }
     if (duckTimeoutRef.current) clearTimeout(duckTimeoutRef.current);
     
@@ -208,15 +202,14 @@ export default function App() {
     setLiveSubtitle("");
   };
 
-  const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode) => {
-    // បន្ថែមលក្ខខណ្ឌ៖ បើមិនទាន់បង់ប្រាក់ មិនអនុញ្ញាតឱ្យបើកប្រព័ន្ធបកប្រែឡើយ ហើយបង្ហាញផ្ទាំងបង់ប្រាក់ភ្លាម
+  // កែសម្រួលគន្លងចាប់ផ្តើម (Start) ឱ្យគាំទ្រទាំង Mode បកប្រែ និង Mode រៀនភាសា
+  const startTranslation = async (activeSource = sourceLang, activeTarget = targetLang, mode = captureMode, selectedMode = appMode) => {
     if (!isPaid) {
       setPayStep(1);
       setShowPayModal(true);
       return;
     }
 
-    // កែប្រែចំណុចទី ២៖ បិទ WebSocket ចាស់ចោលសិនមុននឹងបង្កើតថ្មី ការពារការជាន់គ្នា
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -229,7 +222,7 @@ export default function App() {
       if (mode === 'screen') {
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
         if (isMobile) {
-          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ ដោយសារការរឹតបន្តឹងប្រព័ន្ធសុវត្ថិភាព (OS Restriction)។ សូមប្រើប្រាស់មុខងារ Microphone ជំនួសវិញ ឬបើកកម្មវិធីនេះនៅលើកុំព្យូទ័រ White។");
+          alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ។");
           setCaptureMode('mic');
           return;
         }
@@ -243,7 +236,7 @@ export default function App() {
         const audioTracks = stream.getAudioTracks();
         if (audioTracks.length === 0) {
           stream.getTracks().forEach(track => track.stop());
-          alert("សូមប្រាកដថាអ្នកបានធិក (Tick) លើពាក្យ 'Share tab audio' ឬ 'Share system audio' មុនពេលចែករំលែកអេក្រង់។");
+          alert("សូមប្រាកដថាអ្នកបានធិក (Tick) លើពាក្យ 'Share tab audio' មុនពេលចែករំលែកអេក្រង់។");
           return;
         }
 
@@ -262,13 +255,13 @@ export default function App() {
       mediaStreamRef.current = audioStream;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       
-      // ផ្ញើ userId ទៅកាន់ server តាមរយៈ URL Parameter ដើម្បីផ្ទៀងផ្ទាត់ និងទាញយក API Key
+      // ✅ ប្រសិនបើជា Mode រៀនភាសា វានឹងតភ្ជាប់ទៅកាន់ API ដំណើរការដោយ gemini-3.5-live-translate-preview ដាច់ដោយឡែក
+      const apiEndpoint = selectedMode === 'learning' ? 'learning-live' : 'live';
       const ws = new WebSocket(
-        `${wsProtocol}//${location.host}/live?source=${activeSource}&target=${activeTarget}&userId=${userId}`
+        `${wsProtocol}//${location.host}/${apiEndpoint}?source=${activeSource}&target=${activeTarget}&userId=${userId}`
       );
       wsRef.current = ws;
 
-      // កន្លែងទី១ និងទី៣៖ បង្កើត AudioContext និងលុប sampleRate ចេញពី outputAudioCtx ព្រមទាំងហៅប្រើ resume()
       const inputAudioCtx = new AudioContext({ latencyHint: "interactive", sampleRate: 16000 });
       const outputAudioCtx = new AudioContext({ latencyHint: "interactive" });
 
@@ -289,7 +282,6 @@ export default function App() {
       }
 
       const inputSource = inputAudioCtx.createMediaStreamSource(audioStream);
-      // កែប្រែចំណុចទី ១៖ ប្តូរ Buffer Size ពី 512 ទៅ 2048
       const processor = inputAudioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
       inputSource.connect(processor);
@@ -318,7 +310,6 @@ export default function App() {
           playAudioChunk(outputAudioCtx, msg.audio);
         }
         
-        // កែប្រែចំណុចទី ៣៖ ការពារការបង្ហាញ Transcript ជាន់គ្នា ឬទិន្នន័យដដែលៗ
         if (msg.outputTranscript && msg.outputTranscript !== lastTranscriptRef.current) {
           lastTranscriptRef.current = msg.outputTranscript;
           setLiveSubtitle(msg.outputTranscript);
@@ -338,16 +329,14 @@ export default function App() {
         setRestarting(false);
       };
       
-      // កូដទី៣៖ កែប្រែនៅក្នុង ws.onclose
       ws.onclose = () => {
           if (wsRef.current === ws) {
               wsRef.current = null;
           }
-
           setConnected(false);
       };
     } catch (err) {
-      console.error("Error starting translation", err);
+      console.error("Error starting connection", err);
       setConnected(false);
       setRestarting(false);
     }
@@ -358,18 +347,15 @@ export default function App() {
     setTargetLang(newTarget);
     if (connected) {
       setRestarting(true);
-      
-      // កូដទី១៖ កែប្រែ logic ការរង់ចាំ WebSocket បិទជិត (waitClose)
       stopTranslation();
 
       const waitClose = () => {
         if (wsRef.current === null) {
-          startTranslation(newSource, newTarget, captureMode);
+          startTranslation(newSource, newTarget, captureMode, appMode);
         } else {
           setTimeout(waitClose, 100);
         }
       };
-
       waitClose();
     }
   };
@@ -378,7 +364,7 @@ export default function App() {
     if (mode === 'screen') {
       const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
       if (isMobile) {
-        alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ។ សូមប្រើប្រាស់នៅលើកុំព្យូទ័រ (Desktop)។");
+        alert("មុខងារ Share System Audio មិនគាំទ្រនៅលើទូរស័ព្ទដៃឡើយ។");
         return;
       }
     }
@@ -389,12 +375,28 @@ export default function App() {
 
       const waitClose = () => {
         if (wsRef.current === null) {
-          startTranslation(sourceLang, targetLang, mode);
+          startTranslation(sourceLang, targetLang, mode, appMode);
         } else {
           setTimeout(waitClose, 100);
         }
       };
+      waitClose();
+    }
+  };
 
+  // មុខងារ Toggle ប្តូររវាងការបកប្រែ និងការរៀនភាសា ពេលចុចប៊ូតុងថ្មី
+  const toggleAppMode = (selectedMode: 'translation' | 'learning') => {
+    setAppMode(selectedMode);
+    if (connected) {
+      setRestarting(true);
+      stopTranslation();
+      const waitClose = () => {
+        if (wsRef.current === null) {
+          startTranslation(sourceLang, targetLang, captureMode, selectedMode);
+        } else {
+          setTimeout(waitClose, 100);
+        }
+      };
       waitClose();
     }
   };
@@ -403,7 +405,7 @@ export default function App() {
     const labels: Record<string, string> = {
       km: 'ខ្មែរ (Khmer)', en: 'អង់គ្លេស (English)', zh: 'ចិន (Chinese)', 'zh-HK': 'ចិនកាតាំង (Cantonese)',
       vi: 'វៀតណាម (Vietnamese)', ja: 'ជប៉ុន (Japanese)', ko: 'កូរ៉េ (Korean)', th: 'ថៃ (Thai)',
-      id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡេស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
+      id: 'ឥណ្ឌូនេស៊ី (Indonesian)', ms: 'ម៉ាឡស៊ី (Malay)', lo: 'ឡាវ (Lao)', fr: 'បារាំង (French)',
       de: 'អាល្លឺម៉ង់ (German)', no: 'ន័រវែស (Norwegian)', hi: 'ហិណ្ឌី (Hindi)', fil: 'ហ្វីលីពិន (Filipino)',
       mn: 'ម៉ុងហ្គោលី (Mongolian)', it: 'អ៊ីតាលី (Italian)', he: 'ហេប្រឺ (Hebrew)', ru: 'រុស្ស៊ី (Russian)', my: 'ភូមា (Burmese)'
     };
@@ -516,27 +518,27 @@ export default function App() {
                 e.target.blur();
               }}
             >
-              <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
-              <option value="en" className="bg-[#171A21] text-white">អង់គ្លេស (English)</option>
-              <option value="zh" className="bg-[#171A21] text-white">ចិន (Chinese)</option>
-              <option value="zh-HK" className="bg-[#171A21] text-white">ចិនកាតាំង (Cantonese)</option>
-              <option value="vi" className="bg-[#171A21] text-white">វៀតណាម (Vietnamese)</option>
-              <option value="ja" className="bg-[#171A21] text-white">ជប៉ុន (Japanese)</option>
-              <option value="ko" className="bg-[#171A21] text-white">កូរ៉េ (Korean)</option>
-              <option value="th" className="bg-[#171A21] text-white">ថៃ (Thai)</option>
-              <option value="id" className="bg-[#171A21] text-white">ឥណ្ឌូនេស៊ី (Indonesian)</option>
-              <option value="ms" className="bg-[#171A21] text-white">ម៉ាឡេស៊ី (Malay)</option>
-              <option value="lo" className="bg-[#171A21] text-white">ឡាវ (Lao)</option>
-              <option value="fr" className="bg-[#171A21] text-white">បារាំង (French)</option>
-              <option value="de" className="bg-[#171A21] text-white">អាល្លឺម៉ង់ (German)</option>
-              <option value="no" className="bg-[#171A21] text-white">ន័រវែស (Norwegian)</option>
-              <option value="hi" className="bg-[#171A21] text-white">ឥណ្ឌា (Hindi)</option>
-              <option value="fil" className="bg-[#171A21] text-white">ហ្វីលីពិន (Filipino)</option>
-              <option value="mn" className="bg-[#171A21] text-white">ម៉ុងហ្គោលី (Mongolian)</option>
-              <option value="it" className="bg-[#171A21] text-white">អ៊ីតាលី (Italian)</option>
-              <option value="he" className="bg-[#171A21] text-white">អ៊ីស្រាអែល (Hebrew)</option>
-              <option value="ru" className="bg-[#171A21] text-white">រុស្ស៊ី (Russian)</option>
-              <option value="my" className="bg-[#171A21] text-white">ភូមា (Burmese)</option>
+              <option value="km">ខ្មែរ (Khmer)</option>
+              <option value="en">អង់គ្លេស (English)</option>
+              <option value="zh">ចិន (Chinese)</option>
+              <option value="zh-HK">ចិនកាតាំង (Cantonese)</option>
+              <option value="vi">វៀតណាម (Vietnamese)</option>
+              <option value="ja">ជប៉ុន (Japanese)</option>
+              <option value="ko">កូរ៉េ (Korean)</option>
+              <option value="th">ថៃ (Thai)</option>
+              <option value="id">ឥណ្ឌូនេស៊ី (Indonesian)</option>
+              <option value="ms">ម៉ាឡេស៊ី (Malay)</option>
+              <option value="lo">ឡាវ (Lao)</option>
+              <option value="fr">បារាំង (French)</option>
+              <option value="de">អាល្លឺម៉ង់ (German)</option>
+              <option value="no">ន័រវែស (Norwegian)</option>
+              <option value="hi">ឥណ្ឌា (Hindi)</option>
+              <option value="fil">ហ្វីលីពិន (Filipino)</option>
+              <option value="mn">ម៉ុងហ្គោលី (Mongolian)</option>
+              <option value="it">អ៊ីតាលី (Italian)</option>
+              <option value="he">អ៊ីស្រាអែល (Hebrew)</option>
+              <option value="ru">រុស្ស៊ី (Russian)</option>
+              <option value="my">ភូមា (Burmese)</option>
             </select>
           </div>
           
@@ -561,43 +563,45 @@ export default function App() {
                 e.target.blur();
               }}
             >
-              <option value="km" className="bg-[#171A21] text-white">ខ្មែរ (Khmer)</option>
-              <option value="en" className="bg-[#171A21] text-white">អង់គ្លេស (English)</option>
-              <option value="zh" className="bg-[#171A21] text-white">ចិន (Chinese)</option>
-              <option value="zh-HK" className="bg-[#171A21] text-white">ចិនកាតាំង (Cantonese)</option>
-              <option value="vi" className="bg-[#171A21] text-white">វៀតណាម (Vietnamese)</option>
-              <option value="ja" className="bg-[#171A21] text-white">ជប៉ុន (Japanese)</option>
-              <option value="ko" className="bg-[#171A21] text-white">កូរ៉េ (Korean)</option>
-              <option value="th" className="bg-[#171A21] text-white">ថៃ (Thai)</option>
-              <option value="id" className="bg-[#171A21] text-white">ឥណ្ឌូនេស៊ី (Indonesian)</option>
-              <option value="ms" className="bg-[#171A21] text-white">ម៉ាឡេស៊ី (Malay)</option>
-              <option value="lo" className="bg-[#171A21] text-white">ឡាវ (Lao)</option>
-              <option value="fr" className="bg-[#171A21] text-white">បារាំង (French)</option>
-              <option value="de" className="bg-[#171A21] text-white">អាល្លឺម៉ង់ (German)</option>
-              <option value="no" className="bg-[#171A21] text-white">ន័រវែស (Norwegian)</option>
-              <option value="hi" className="bg-[#171A21] text-white">ឥណ្ឌា (Hindi)</option>
-              <option value="fil" className="bg-[#171A21] text-white">ហ្វីលីពិន (Filipino)</option>
-              <option value="mn" className="bg-[#171A21] text-white">ម៉ុងហ្គោលី (Mongolian)</option>
-              <option value="it" className="bg-[#171A21] text-white">អ៊ីតាលី (Italian)</option>
-              <option value="he" className="bg-[#171A21] text-white">អ៊ីស្រាអែល (Hebrew)</option>
-              <option value="ru" className="bg-[#171A21] text-white">រុស្ស៊ី (Russian)</option>
-              <option value="my" className="bg-[#171A21] text-white">ភូមា (Burmese)</option>
+              <option value="km">ខ្មែរ (Khmer)</option>
+              <option value="en">អង់គ្លេស (English)</option>
+              <option value="zh">ចិន (Chinese)</option>
+              <option value="zh-HK">ចិនកាតាំង (Cantonese)</option>
+              <option value="vi">វៀតណាម (Vietnamese)</option>
+              <option value="ja">ជប៉ុន (Japanese)</option>
+              <option value="ko">កូរ៉េ (Korean)</option>
+              <option value="th">ថៃ (Thai)</option>
+              <option value="id">ឥណ្ឌូនេស៊ី (Indonesian)</option>
+              <option value="ms">ម៉ាឡេស៊ី (Malay)</option>
+              <option value="lo">ឡាវ (Lao)</option>
+              <option value="fr">បារាំង (French)</option>
+              <option value="de">អាល្លឺម៉ង់ (German)</option>
+              <option value="no">ន័រវែស (Norwegian)</option>
+              <option value="hi">ឥណ្ឌា (Hindi)</option>
+              <option value="fil">ហ្វីលីពិន (Filipino)</option>
+              <option value="mn">ម៉ុងហ្គោលី (Mongolian)</option>
+              <option value="it">អ៊ីតាលី (Italian)</option>
+              <option value="he">អ៊ីស្រាអែល (Hebrew)</option>
+              <option value="ru">រុស្ស៊ី (Russian)</option>
+              <option value="my">ភូមា (Burmese)</option>
             </select>
           </div>
         </div>
 
         {/* ROBOT HEAD UI SECTION */}
-        <div className="flex flex-col items-center justify-center pt-2 pb-4">
+        <div className="flex flex-col items-center justify-center pt-2 pb-2">
           <div className="relative flex flex-col items-center">
             <div className={`w-32 h-24 rounded-[40px] bg-gradient-to-b from-[#1E293B] to-[#0F172A] border-[3px] flex items-center justify-center p-4 shadow-2xl transition-all duration-300 relative
               ${connected 
-                ? 'border-[#4F7CFF] shadow-[0_0_30px_rgba(79,124,255,0.4)]' 
+                ? appMode === 'learning' 
+                  ? 'border-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.4)]' 
+                  : 'border-[#4F7CFF] shadow-[0_0_30px_rgba(79,124,255,0.4)]' 
                 : 'border-[#334155] shadow-black'
               }`}
             >
               <div className="absolute -top-4 w-1 h-4 bg-slate-500 left-1/2 -translate-x-1/2">
                 <div className={`absolute -top-2 w-3 h-3 rounded-full left-1/2 -translate-x-1/2 shadow-lg transition-colors duration-300
-                  ${connected ? 'bg-[#4F7CFF] shadow-[0_0_10px_#4F7CFF]' : 'bg-slate-400'}`} 
+                  ${connected ? appMode === 'learning' ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]' : 'bg-[#4F7CFF] shadow-[0_0_10px_#4F7CFF]' : 'bg-slate-400'}`} 
                 />
               </div>
 
@@ -607,28 +611,48 @@ export default function App() {
               <div className="w-full h-full bg-[#090D1A] rounded-[24px] border border-white/5 flex items-center justify-center gap-6 px-4">
                 <div className={`w-5 h-5 rounded-full transition-all duration-300
                   ${connected 
-                    ? 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
+                    ? appMode === 'learning' ? 'bg-emerald-400 shadow-[0_0_20px_#34d399] scale-110 animate-blink' : 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
                     : 'bg-[#2E5BFF] shadow-[0_0_10px_rgba(46,91,255,0.6)]'
                   }`} 
                 />
                 <div className={`w-5 h-5 rounded-full transition-all duration-300
                   ${connected 
-                    ? 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
+                    ? appMode === 'learning' ? 'bg-emerald-400 shadow-[0_0_20px_#34d399] scale-110 animate-blink' : 'bg-[#4F7CFF] shadow-[0_0_20px_#4F7CFF] scale-110 animate-blink' 
                     : 'bg-[#2E5BFF] shadow-[0_0_10px_rgba(46,91,255,0.6)]'
                   }`} 
                 />
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-400 max-w-[260px] leading-relaxed mt-3">
+            <p className="text-[11px] text-slate-400 max-w-[260px] leading-relaxed mt-3 text-center">
               {restarting
                 ? "កំពុងអនុវត្តភាសាថ្មី..."
                 : connected 
-                ? "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ"
-                : "សូមចុចប៊ូតុង Live Translator ដើម្បីចាប់ផ្តើមបកប្រែ"
+                ? appMode === 'learning' 
+                  ? "Mode រៀនភាសា៖ គ្រូ AI កំពុងស្តាប់ និងត្រៀមជជែកលេងជាមួយអ្នក"
+                  : "ប្រព័ន្ធកំពុងដំណើរការស្តាប់ និងបកប្រែដោយស្វ័យប្រវត្តិ"
+                : "សូមចុចប៊ូតុងខាងក្រោមដើម្បីចាប់ផ្តើម"
               }
             </p>
           </div>
+        </div>
+
+        {/* ✅ ប៊ូតុងថ្មី៖ ប៊ូតុងធំមួយដាច់ដោយឡែកសម្រាប់បើក/បិទ មុខងាររៀនភាសា (Language Learning Mode) */}
+        <div className="w-full flex justify-center mb-2">
+          <button
+            onClick={() => {
+              const targetMode = appMode === 'translation' ? 'learning' : 'translation';
+              toggleAppMode(targetMode);
+            }}
+            className={`w-full max-w-[280px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 font-bold text-xs border tracking-wide transition-all shadow-md duration-300 ${
+              appMode === 'learning'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(52,211,153,0.2)]'
+                : 'bg-white/[0.02] text-slate-300 border-white/10 hover:bg-white/5'
+            }`}
+          >
+            <GraduationCap size={16} />
+            {appMode === 'learning' ? "កំពុងបើក៖ របៀបរៀនភាសា (AI Teacher)" : "ប្តូរទៅ៖ របៀបរៀនភាសា (AI Teacher)"}
+          </button>
         </div>
 
         {/* CONVERSATION BUBBLES CONTAINER */}
@@ -647,7 +671,7 @@ export default function App() {
           {connected && (
             <>
               <div className="absolute left-4 md:left-12 flex items-center gap-1 h-10">
-                <div className="w-[3px] bg-cyan-400 rounded-full animate-wave-bar-1" />
+                <div className={`w-[3px] rounded-full animate-wave-bar-1 ${appMode === 'learning' ? 'bg-emerald-400' : 'bg-cyan-400'}`} />
                 <div className="w-[3px] bg-[#4F7CFF] rounded-full animate-wave-bar-2" />
                 <div className="w-[3px] bg-blue-500 rounded-full animate-wave-bar-3" />
                 <div className="w-[3px] bg-indigo-400 rounded-full animate-wave-bar-4" />
@@ -656,7 +680,7 @@ export default function App() {
                 <div className="w-[3px] bg-indigo-400 rounded-full animate-wave-bar-4" />
                 <div className="w-[3px] bg-blue-500 rounded-full animate-wave-bar-3" />
                 <div className="w-[3px] bg-[#4F7CFF] rounded-full animate-wave-bar-2" />
-                <div className="w-[3px] bg-cyan-400 rounded-full animate-wave-bar-1" />
+                <div className={`w-[3px] rounded-full animate-wave-bar-1 ${appMode === 'learning' ? 'bg-emerald-400' : 'bg-cyan-400'}`} />
               </div>
             </>
           )}
@@ -682,45 +706,58 @@ export default function App() {
               >
                 <Languages size={24} className="mb-1 text-red-100 md:w-7 md:h-7 drop-shadow-md" />
                 <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-red-100/90 leading-tight">Stop</span>
-                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
+                <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">
+                  {appMode === 'learning' ? "Learning" : "Translator"}
+                </span>
               </button>
             </div>
           ) : (
             <div className="relative flex items-center justify-center">
-              <div className="absolute -inset-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 blur opacity-40 group-hover:opacity-70 transition duration-1000" />
+              <div className={`absolute -inset-1.5 rounded-full blur opacity-40 group-hover:opacity-70 transition duration-1000 ${appMode === 'learning' ? 'bg-gradient-to-r from-emerald-400 to-teal-600' : 'bg-gradient-to-r from-cyan-500 to-blue-600'}`} />
               <div className="absolute -inset-3 rounded-full border border-blue-500/20 opacity-60" />
 
               <button 
                 disabled={restarting}
                 onClick={() => {
                   if (!restarting) {
-                    startTranslation(sourceLang, targetLang, captureMode);
+                    startTranslation(sourceLang, targetLang, captureMode, appMode);
                   }
                 }}
-                className="
+                className={`
                   w-[140px] h-[140px] md:w-[180px] md:h-[180px]
                   rounded-full
-                  bg-gradient-to-b from-[#2563EB] via-[#1D4ED8] to-[#1E3A8A]
                   text-white
-                  border-2 border-blue-400/40
-                  shadow-[0_0_35px_rgba(37,99,235,0.6),inset_0_4px_12px_rgba(255,255,255,0.3)]
+                  border-2
                   transition-all duration-300
                   hover:scale-105 active:scale-95
                   flex flex-col items-center justify-center select-none p-2
                   animate-breathe
                   disabled:opacity-80 disabled:cursor-not-allowed
-                "
+                  ${appMode === 'learning' 
+                    ? 'from-emerald-500 via-teal-600 to-emerald-900 border-emerald-400/40 shadow-[0_0_35px_rgba(16,185,129,0.6),inset_0_4px_12px_rgba(255,255,255,0.3)] bg-gradient-to-b' 
+                    : 'from-[#2563EB] via-[#1D4ED8] to-[#1E3A8A] border-blue-400/40 shadow-[0_0_35px_rgba(37,99,235,0.6),inset_0_4px_12px_rgba(255,255,255,0.3)] bg-gradient-to-b'
+                  }
+                `}
               >
-                <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                {appMode === 'learning' ? (
+                  <GraduationCap size={28} className="mb-1 text-emerald-200 md:w-9 md:h-9 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                ) : (
+                  <Languages size={26} className="mb-1 text-cyan-200 md:w-8 md:h-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                )}
+                
                 {restarting ? (
                   <>
                     <span className="text-[11px] text-cyan-100">Applying</span>
-                    <span className="text-sm font-bold text-white">New Language...</span>
+                    <span className="text-sm font-bold text-white">Connecting...</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">Live</span>
-                    <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">Translator</span>
+                    <span className="text-[12px] md:text-sm font-light uppercase tracking-[0.18em] text-cyan-100/90 leading-tight">
+                      {appMode === 'learning' ? "AI Teacher" : "Live"}
+                    </span>
+                    <span className="text-sm md:text-base font-extrabold tracking-wide drop-shadow-lg text-white">
+                      {appMode === 'learning' ? "Start Learning" : "Translator"}
+                    </span>
                   </>
                 )}
               </button>
@@ -736,14 +773,10 @@ export default function App() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* ផ្ទាំង PREMIUM POPUP MODAL (លេចឡើងដោយមិនប៉ះពាល់ដល់ UI ចាស់ សម្រាប់បង់ប្រាក់) */}
-      {/* ========================================================================= */}
+      {/* PREMIUM POPUP MODAL */}
       {showPayModal && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-[#111625] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center relative shadow-2xl">
-            
-            {/* ប៊ូតុងខ្វែងបិទ [X] លេចឡើងតែនៅជំហានទី 1 និងនៅជំហានទី 4 */}
             {(payStep === 1 || payStep === 4) && (
               <button 
                 onClick={() => setShowPayModal(false)} 
@@ -753,7 +786,6 @@ export default function App() {
               </button>
             )}
 
-            {/* ជំហានទី ១៖ បង្ហាញ ID និងស្ថានភាពរួមទាំងប៊ូតុងបង់ប្រាក់ */}
             {payStep === 1 && (
               <div>
                 <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3 border border-[#4F7CFF]/30">
@@ -785,7 +817,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ជំហានទី ២៖ ជ្រើសរើសរយៈពេលប្រើប្រាស់ */}
             {payStep === 2 && (
               <div>
                 <h3 className="text-base font-bold text-white mb-1">ជ្រើសរើសរយៈពេលប្រើប្រាស់</h3>
@@ -819,7 +850,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ជំហានទី ៣៖ បង្ហាញរូបភាព QR Code ពិតប្រាកដរបស់ធនាគារ */}
             {payStep === 3 && selectedPlan && (
               <div>
                 <h3 className="text-base font-bold text-white mb-1">ស្កេនទូទាត់ប្រាក់ {selectedPlan.price}</h3>
@@ -827,14 +857,11 @@ export default function App() {
                   {calculateDatesText(selectedPlan.days)}
                 </p>
 
-                {/* ប៊ូតុងរើសធនាគារដើម្បីផ្លាស់ប្តូរការបង្ហាញរូបភាព QR ជាក់លាក់ */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button 
                     onClick={() => setActiveBank('aba')}
                     className={`p-2 rounded-xl text-center text-[11px] font-bold transition-all block border ${
-                      activeBank === 'aba' 
-                        ? 'bg-[#005A9C] text-white border-white/20' 
-                        : 'bg-[#005A9C]/10 text-slate-300 border-transparent'
+                      activeBank === 'aba' ? 'bg-[#005A9C] text-white border-white/20' : 'bg-[#005A9C]/10 text-slate-300 border-transparent'
                     }`}
                   >
                     ធនាគារ ABA
@@ -842,25 +869,19 @@ export default function App() {
                   <button 
                     onClick={() => setActiveBank('acleda')}
                     className={`p-2 rounded-xl text-center text-[11px] font-bold transition-all block border ${
-                      activeBank === 'acleda' 
-                        ? 'bg-[#D4AF37] text-black border-white/20' 
-                        : 'bg-[#D4AF37]/10 text-slate-300 border-transparent'
+                      activeBank === 'acleda' ? 'bg-[#D4AF37] text-black border-white/20' : 'bg-[#D4AF37]/10 text-slate-300 border-transparent'
                     }`}
                   >
                     ធនាគារ Acleda
                   </button>
                 </div>
 
-                {/* ✅ កូដបង្ហាញរូបភាព QR ពិតប្រាកដរបស់អ្នក (ដោះស្រាយបញ្ហាស្កេនមិនស្គាល់) */}
                 <div className="bg-white p-2 rounded-2xl max-w-[280px] mx-auto mb-3 shadow-md overflow-hidden flex items-center justify-center">
                   <img 
-                    src={activeBank === 'aba' 
-                      ? "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR ABA របស់បង
-                      : "https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" // 👈 រូបភាព QR Acleda របស់បង
-                    } 
+                    src="https://i.postimg.cc/x1QMRHK3/photo-2026-06-25-17-23-28.jpg" 
                     alt="Payment QR Code" 
                     className="w-full h-auto object-contain rounded-xl mx-auto"
-                    style={{ maxHeight: '360px' }} // កំណត់កម្ពស់ឱ្យវែងសមល្មមនឹងរូបរាង QR ដើមរបស់ធនាគារខ្មែរ
+                    style={{ maxHeight: '360px' }} 
                   />
                 </div>
 
@@ -869,29 +890,11 @@ export default function App() {
                 </p>
 
                 <div className="flex gap-2">
-                  <button 
-                    onClick={() => setPayStep(2)} 
-                    className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-300 py-2.5 rounded-xl font-bold text-xs transition-all"
-                  >
-                    ប្តូរកញ្ចប់
-                  </button>
+                  <button onClick={() => setPayStep(2)} className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-300 py-2.5 rounded-xl font-bold text-xs transition-all">ប្តូរកញ្ចប់</button>
                   <button 
                     onClick={() => {
-                      // បង្កើតសារអត្ថបទអូតូដើម្បីផ្ញើទៅកាន់ Telegram តាមការចង់បានរបស់អ្នក
-                      const message = encodeURIComponent(`
-🆔 ID ម៉ាស៊ីន៖ ${userId}
-📦 កញ្ចប់ជ្រើសរើស៖ ${selectedPlan.name}
-💵 តម្លៃទូទាត់៖ ${selectedPlan.price}
-🏦 ធនាគារទូទាត់៖ ${activeBank === "aba" ? "ABA Bank" : "Acleda Bank"}
-
-👉 សូមចុច ផ្ញើ បន្ទាប់មកថតវិក័យប័ត្របង់ប្រាក់ផ្ញើមកម្ដងទៀត។
-`);
-                      
-                      // រក្សារចនាសម្ព័ន្ធ window.open ដដែល
-                      window.open(
-                        `https://t.me/hengheng56?text=${message}`,
-                        "_blank"
-                      );
+                      const message = encodeURIComponent(`🆔 ID ម៉ាស៊ីន៖ ${userId}\n📦 កញ្ចប់ជ្រើសរើស៖ ${selectedPlan.name}\n💵 តម្លៃទូទាត់៖ ${selectedPlan.price}\n🏦 ធនាគារទូទាត់៖ ${activeBank === "aba" ? "ABA Bank" : "Acleda Bank"}\n\n👉 សូមចុច ផ្ញើ បន្ទាប់មកថតវិក័យប័ត្របង់ប្រាក់ផ្ញើមកម្ដងទៀត។`);
+                      window.open(`https://t.me/hengheng56?text=${message}`, "_blank");
                     }} 
                     className="w-2/3 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
                   >
@@ -901,16 +904,13 @@ export default function App() {
               </div>
             )}
 
-            {/* ជំហានទី ៤៖ ផ្ទាំង Pop up បន្ថែមស្រេចចិត្ត ឱ្យវាយលេខទូរសព្ទភ្ជាប់ជាមួយ ID */}
             {payStep === 4 && (
               <div>
                 <div className="w-12 h-12 bg-[#4F7CFF]/15 text-[#4F7CFF] rounded-full flex items-center justify-center mx-auto mb-3">
                   <Phone size={20} />
                 </div>
                 <h3 className="text-base font-bold text-white mb-1">ភ្ជាប់លេខទូរស័ព្ទ (ស្រស្រចិត្ត)</h3>
-                <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                  ងាយស្រួលសម្រាប់ការផ្ទៀងផ្ទាត់ និងជួយសម្រួលពេលមានបញ្ហា។ អ្នកអាចខ្វែងចោល [✕] ក៏បាន។
-                </p>
+                <p className="text-xs text-slate-400 mb-4 leading-relaxed">ងាយស្រួលសម្រាប់ការផ្ទៀងផ្ទាត់ និងជួយសម្រួលពេលមានបញ្ហា។</p>
 
                 <input 
                   type="tel" 
@@ -921,26 +921,14 @@ export default function App() {
                 />
 
                 <div className="flex gap-2">
-                  <button 
-                    onClick={() => setShowPayModal(false)} 
-                    className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-400 py-2.5 rounded-xl font-bold text-xs transition-all"
-                  >
-                    មិនដាក់ទេ
-                  </button>
-                  <button 
-                    onClick={handleSavePhone} 
-                    className="w-2/3 bg-[#4F7CFF] hover:bg-[#3b66e0] text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all"
-                  >
-                    រក្សាទុក (Save)
-                  </button>
+                  <button onClick={() => setShowPayModal(false)} className="w-1/3 bg-white/5 hover:bg-white/10 text-slate-400 py-2.5 rounded-xl font-bold text-xs transition-all">មិនដាក់ទេ</button>
+                  <button onClick={handleSavePhone} className="w-2/3 bg-[#4F7CFF] hover:bg-[#3b66e0] text-white py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all">រក្សាទុក (Save)</button>
                 </div>
               </div>
             )}
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

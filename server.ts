@@ -305,6 +305,8 @@ async function startServer() {
     console.log("Client connected via WebSocket");
     
     const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
+    const pathname = url.pathname; // 💡 ទាញយកផ្លូវកូដដើម្បីដឹងថា User ចង់បកប្រែ ឬចង់រៀនភាសា
+    
     const source = url.searchParams.get("source") || "km";
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
@@ -367,7 +369,31 @@ async function startServer() {
       const lang1Name = langNames[source] || source;
       const lang2Name = langNames[target] || target;
 
-      const systemInstruction = `
+      // ==========================================================
+      // 💡 កន្លែងបំបែកលក្ខខណ្ឌ៖ MODE បកប្រែចាស់ VS MODE រៀនភាសាថ្មី
+      // ==========================================================
+      let systemInstruction = "";
+      let chosenModel = "gemini-3.1-flash-live-preview"; // ម៉ូដែលលំនាំដើមរបស់ចាស់
+
+      if (pathname === "/learning-live") {
+        // 🚀 បើមកពីប៊ូតុងរៀនភាសាថ្មី៖ ប្រើម៉ូដែលថ្មី និង Instruction ពិសេសដែលអ្នកបានណែនាំ
+        chosenModel = "gemini-3.5-live-translate-preview";
+        systemInstruction = `
+You are a friendly, patient, and highly interactive language teacher. 
+Your goal is to practice real-life communication and speak with the user to help them learn.
+The language they want to practice or learn is ${lang2Name}, and their native language is ${lang1Name}.
+
+PRACTICE & FLOW RULES:
+1. Always start the session with a warm greeting in both languages and friendly suggest 3 simple, fun real-life topics (e.g., Ordering coffee/food, checking in at a hotel, introducing oneself) and ask them to choose one.
+2. If the user stays silent for 5 seconds or says they don't know what to talk about, or reject the 3 topics, immediately shift to a casual tone and ask about their personal hobbies (like movies, music, sports, or gaming) to lower their stress.
+3. If they still remain passive or don't know what to say, offer a "Mirror Game": Tell them they can say anything they want in Khmer (${lang1Name}), and you will teach them how to translate and say it naturally in the target language (${lang2Name}).
+4. Keep your responses short, natural, conversational, and encouraging. Never make long paragraphs.
+5. Gently correct their pronunciation or grammar through the voice feed immediately when they make a mistake.
+`;
+        console.log(`Language Learning Mode Active using [${chosenModel}] for User: ${userId}`);
+      } else {
+        // 🔒 បើមកពីផ្លូវចាស់៖ រក្សាកូដលក្ខខណ្ឌបកប្រែតឹងរឹងចាស់ដដែល ១០០%
+        systemInstruction = `
 You are a strict real-time translator.
 Selected language pair: A = ${lang1Name}, B = ${lang2Name}
 Translation rules:
@@ -378,8 +404,8 @@ Translation rules:
 5. Never use conversation history to decide direction. Treat every utterance independently.
 6. Translate only. Never explain, answer, summarize, or chat.
 `;
-
-      console.log(`Live 2-Way Interpreter Active: [${lang1Name} ↔ ${lang2Name}] for User: ${userId}`);
+        console.log(`Live 2-Way Interpreter Active: [${lang1Name} ↔ ${lang2Name}] for User: ${userId}`);
+      }
       
       let liveSession: any = null;
 
@@ -417,7 +443,7 @@ Translation rules:
           });
 
           liveSession = await ai.live.connect({
-            model: "gemini-3.1-flash-live-preview",
+            model: chosenModel, // 💡 ដំណើរការទៅតាមម៉ូដែលដែលបានជ្រើសរើសខាងលើ
             config: {
               responseModalities: [Modality.AUDIO],
               outputAudioTranscription: {},
