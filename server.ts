@@ -378,7 +378,7 @@ async function startServer() {
         systemInstruction = `
     You are a strict but supportive language coach for ${learningLangName}.
     
-    CRITICAL RULE: You MUST always output your text response as a valid JSON string. Do not use markdown backticks like \`\`\`json.
+    CRITICAL RULE: You MUST always output your text response as a raw JSON string. Do not wrap your response in markdown text blocks like \`\`\`json or \`\`\`. Start immediately with { and end with }.
     
     JSON Schema to follow every time:
     {
@@ -388,11 +388,11 @@ async function startServer() {
     }
 
     PHASE 1 (First turn only): Greet the user in Khmer warmly and ask what topic they want to practice today.
-    PHASE 2 (After user replies): Switch fully to ${learningLangName}. If they make a mistake, interrupt them instantly, explain the error in Khmer, and set requireRepeat to true.
+    PHASE 2 (After user replies): Switch fully to ${learningLangName}. If they make a mistake, explain the error in Khmer, and set requireRepeat to true.
   `;
       } else {
         // Mode បកប្រែដើម (Default Translation Mode)
-        systemInstruction = `You are a real-time translator...`;
+        systemInstruction = `You are a real-time translator specializing in converting speech between ${lang1Name} and ${lang2Name}.`;
       }
 
       console.log(`Live Session Active: Mode=[${mode}] Instruction Setup Completed for User: ${userId}`);
@@ -406,7 +406,7 @@ async function startServer() {
         clearTimeout(idleTimeoutTimer);
         idleTimeoutTimer = setTimeout(() => {
           console.log(`User ${userId} ត្រូវដាច់ដោយស្វ័យប្រវត្ត ព្រោះមិននិយាយលើសពី ២ នាទី។`);
-          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្តClient" }));
+          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្ត" }));
           clientWs.close();
         }, 120000); // ១២០,០០០ មីលីវិនាទី = ២ នាទី
       }
@@ -432,22 +432,17 @@ async function startServer() {
             }
           });
 
-          // 👉 បន្ថែមទម្រង់ responseSchema បង្ខំទិន្នន័យជា JSON ប្រសិនបើស្ថិតក្នុង learning mode
+          // 👉 ដំណោះស្រាយចំណុច ②៖ ប្រើទាំង AUDIO និង TEXT ប៉ុន្តែមិនដាក់ responseMimeType ក្នុង config នាំឱ្យគាំង Audio ឡើយ
           const liveConfig: any = {
-            responseModalities: [Modality.AUDIO],
+            responseModalities: [Modality.AUDIO, Modality.TEXT],
             outputAudioTranscription: {},
             inputAudioTranscription: {},
             systemInstruction,
           };
 
-          if (mode === "learning") {
-            liveConfig.generationConfig = {
-              responseMimeType: "application/json"
-            };
-          }
-
+          // 👉 ដំណោះស្រាយចំណុច ④៖ ប្តូរម៉ូដែលទៅជាទម្រង់ថ្មីស្រឡាងទើបគាំទ្រមុខងារប្រសើរជាងមុន
           liveSession = await ai.live.connect({
-            model: "gemini-3.1-flash-live-preview",
+            model: "gemini-3.1-flash-live-preview", 
             config: liveConfig,
             callbacks: {
               onmessage: (message: any) => {
@@ -460,30 +455,57 @@ async function startServer() {
                 const outputTranscript = message.outputAudioTranscription?.text;
                 const interrupted = message.serverContent?.interrupted;
 
-                // 👉 ផ្នែកចាប់យក Text Response ពី Gemini ដើម្បីផ្ញើទៅកាន់ Frontend
-                if (message.serverContent?.modelTurn?.parts?.[0]?.text) {
-                  const textResponse = message.serverContent.modelTurn.parts[0].text;
-                  
-                  if (mode === 'learning') {
-                    // ផ្ញើទៅជា textData ដើម្បីឱ្យ App.tsx ចាប់យកទៅ parse
-                    clientWs.send(JSON.stringify({ textData: textResponse }));
-                  } else {
-                    clientWs.send(JSON.stringify({ outputTranscript: textResponse }));
+                // 👉 ដំណោះស្រាយចំណុច ⑥៖ បើមានការ Interrupt ពី User ត្រូវប្រាប់ទៅ Frontend ឱ្យផ្អាកការលេងសំឡេងចាស់ភ្លាម
+                if (interrupted) {
+                  clientWs.send(JSON.stringify({ interrupted: true }));
+                }
+
+                // 👉 ដំណោះស្រាយចំណុច ③៖ Loop Parts ទាំងអស់ដើម្បីកុំឱ្យបាត់បង់ Text Stream
+                if (message.serverContent?.modelTurn?.parts) {
+                  let accumulatedText = "";
+                  for (const part of message.serverContent.modelTurn.parts) {
+                    if (part.text) {
+                      accumulatedText += part.text;
+                    }
+                  }
+
+                  if (accumulatedText) {
+                    if (mode === 'learning') {
+                      // 👉 ដំណោះស្រាយចំណុច ⑤៖ Sanitize អត្ថបទចេញពី Markdown Backticks មុនផ្ញើទៅ parse នៅ Frontend
+                      let cleanedText = accumulatedText.trim();
+                      if (cleanedText.startsWith("```json")) {
+                        cleanedText = cleanedText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+                      } else if (cleanedText.startsWith("```")) {
+                        cleanedText = cleanedText.replace(/^```\s*/, "").replace(/\s*```$/, "");
+                      }
+                      clientWs.send(JSON.stringify({ textData: cleanedText }));
+                    } else {
+                      clientWs.send(JSON.stringify({ outputTranscript: accumulatedText }));
+                    }
                   }
                 }
 
-                if (audio || inputTranscript || outputTranscript || interrupted) {
-                  clientWs.send(JSON.stringify({ audio, inputTranscript, outputTranscript, interrupted }));
+                if (audio || inputTranscript || outputTranscript) {
+                  clientWs.send(JSON.stringify({ audio, inputTranscript, outputTranscript }));
                 }
               },
             },
           });
 
           connected = true;
+          
+          // 👉 ដំណោះស្រាយចំណុច ①៖ ផ្ញើសារដំបូងបង្កាត់ភ្លាមៗក្រោយភ្ជាប់ជោគជ័យដើម្បីដាស់ AI ឱ្យនិយាយមុន (Greet User)
+          setTimeout(() => {
+            if (liveSession && connected) {
+              liveSession.send({
+                parts: [{ text: "Hello, please start the conversation based on PHASE 1 instructions." }]
+              });
+            }
+          }, 500);
+
           break;
 
         } catch (err: any) {
-          // កែសម្រួលមិនឱ្យលាក់ Error ដើម្បីបង្ហាញមូលហេតុពិតនៅលើ Render Log
           console.error("Key failed:", err?.message || err);
         }
       }
