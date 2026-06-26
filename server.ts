@@ -8,15 +8,12 @@ import { pool } from "./db";
 
 // ==========================================
 // ផ្នែកទី ១៖ បញ្ជី API Keys ហ្វ្រីទាំងអស់ (Round Robin)
-// 🔥 ជំហានទី ១៖ ប្តូរ API Keys ពិតប្រាកដទៅជាអក្សរសម្គាល់ (Placeholder) សិន
 // ==========================================
 const GEMINI_KEYS_POOL = [
-  "GOOGLE_API_KEY_1", // Key ទី ១ ( placeholder )
-  "GOOGLE_API_KEY_2", // Key ទី ២ ( placeholder )
-   // ដាក់ Key ផ្សេងទៀតដែលមានចូលក្នុងនេះ...
+  "GOOGLE_API_KEY_1",
+  "GOOGLE_API_KEY_2",
 ];
 
-// ② ជំនួស getNextGeminiKey() ដោយ getKeyByUser(userId)
 function getKeyByUser(userId: string) {
   const keys = GEMINI_KEYS_POOL
     .map(name => process.env[name])
@@ -142,7 +139,7 @@ async function startServer() {
     }
   });
 
-  // ៤. API សម្រាប់ Admin លុប User (លុបដាច់)
+  // ៤. API សម្រាប់ Admin លុប User
   app.post("/api/admin/delete-user", async (req, res) => {
     const { password, userId } = req.body;
 
@@ -201,7 +198,7 @@ async function startServer() {
     }
   });
 
-  // ៧. API សម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID (ON CONFLICT)
+  // ៧. API សម្រាប់ Admin កំណត់ ឬប្តូរ API Key និងថ្ងៃផុតកំណត់ឱ្យ User ID
   app.post("/api/admin/set-user", async (req, res) => {
     const { password, userId, days, plan, geminiApiKey } = req.body;
 
@@ -278,7 +275,6 @@ async function startServer() {
     }
   });
 
-  // Route សម្រាប់ Admin Page
   app.get("/admin.html", (req, res) => {
     res.sendFile(path.join(process.cwd(), "public", "admin.html"));
   });
@@ -305,16 +301,15 @@ async function startServer() {
     console.log("Client connected via WebSocket");
     
     const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
-    const pathname = url.pathname; // 💡 ទាញយកផ្លូវកូដដើម្បីដឹងថា User ចង់បកប្រែ ឬចង់រៀនភាសា
+    const pathname = url.pathname; // Catch the specific pathname for routing
     
     const source = url.searchParams.get("source") || "km";
     const target = url.searchParams.get("target") || "en";
     const userId = url.searchParams.get("userId") || "";
 
-    const startTime = Date.now(); // 🔥 គណនាម៉ោងចាប់ផ្ដើមនិយាយ
+    const startTime = Date.now();
 
     try {
-      // 🔥 ១. ឆែកមើលទិន្នន័យ User ពី Database
       const result = await pool.query("SELECT * FROM users WHERE userid = $1 AND deleted != 1", [userId]);
       const user = result.rows[0];
 
@@ -331,11 +326,9 @@ async function startServer() {
         return;
       }
 
-      // 🔥 ២. ប្រព័ន្ធកំណត់ ៥ ម៉ោង (៣០០ នាទី) ប្រចាំថ្ងៃ
-      const todayStr = new Date().toISOString().split('T')[0]; // ទាញយកថ្ងៃខែថ្ងៃនេះ
+      const todayStr = new Date().toISOString().split('T')[0];
       let currentUsedMinutes = Number(user.usedminutes) || 0;
 
-      // ក. បើចូលដល់ថ្ងៃថ្មី ត្រូវ Reset នាទីឱ្យបាននិយាយ ០ នាទីឡើងវិញដោយស្វ័យប្រវត្ត
       if (user.lastuseddate !== todayStr) {
         try {
           await pool.query("UPDATE users SET usedminutes = 0, lastuseddate = $1 WHERE userid = $2", [todayStr, userId]);
@@ -346,14 +339,12 @@ async function startServer() {
         }
       }
 
-      // ខ. ឆែកមើលលក្ខខណ្ឌ ៥ ម៉ោង (៣០០ នាទី)
       if (currentUsedMinutes >= 300) {
         clientWs.send(JSON.stringify({ error: "អ្នកបានប្រើប្រាស់អស់កំណត់ ៥ ម៉ោងសម្រាប់ថ្ងៃនេះហើយ! សូមរង់ចាំស្អែកទើបអាចប្រើបានម្តងទៀត。" }));
         clientWs.close();
         return;
       }
 
-      // ③ កន្លែងជ្រើស API Key (កែសម្រួលដើម្បី Fallback ទៅរក Pool Keys បើទោះជា Key ផ្ទាល់ខ្លួនរបស់ User ដើរមិនរួច)
       const candidateKeys = user.geminiapikey
         ? [user.geminiapikey, ...getKeyByUser(userId)]
         : getKeyByUser(userId);
@@ -370,13 +361,12 @@ async function startServer() {
       const lang2Name = langNames[target] || target;
 
       // ==========================================================
-      // 💡 កន្លែងបំបែកលក្ខខណ្ឌ៖ MODE បកប្រែចាស់ VS MODE រៀនភាសាថ្មី
+      // 💡 បំបែក Mode ដោយសុវត្ថិភាព ផ្អែកលើ Pathname ប៊ូតុងដែល Client ចុច
       // ==========================================================
       let systemInstruction = "";
-      let chosenModel = "gemini-3.1-flash-live-preview"; // ម៉ូដែលលំនាំដើមរបស់ចាស់
+      let chosenModel = "gemini-3.1-flash-live-preview";
 
       if (pathname === "/learning-live") {
-        // 🚀 បើមកពីប៊ូតុងរៀនភាសាថ្មី៖ ប្រើម៉ូដែលថ្មី និង Instruction ពិសេសដែលអ្នកបានណែនាំ
         chosenModel = "gemini-3.5-live-translate-preview";
         systemInstruction = `
 You are a friendly, patient, and highly interactive language teacher. 
@@ -392,7 +382,6 @@ PRACTICE & FLOW RULES:
 `;
         console.log(`Language Learning Mode Active using [${chosenModel}] for User: ${userId}`);
       } else {
-        // 🔒 បើមកពីផ្លូវចាស់៖ រក្សាកូដលក្ខខណ្ឌបកប្រែតឹងរឹងចាស់ដដែល ១០០%
         systemInstruction = `
 You are a strict real-time translator.
 Selected language pair: A = ${lang1Name}, B = ${lang2Name}
@@ -408,32 +397,26 @@ Translation rules:
       }
       
       let liveSession: any = null;
-
-      // 🔥 ប្រព័ន្ធ Idle Timeout (២ នាទីផ្ដាច់)
       let idleTimeoutTimer: NodeJS.Timeout;
       
       function resetIdleTimeout() {
         clearTimeout(idleTimeoutTimer);
         idleTimeoutTimer = setTimeout(() => {
           console.log(`User ${userId} ត្រូវដាច់ដោយស្វ័យប្រវត្ត ព្រោះមិននិយាយលើសពី ២ នាទី។`);
-          clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្តClient" }));
-          clientWs.close();
-        }, 120000); // ១២០,០០០ មីលីវិនាទី = ២ នាទី
+          if (clientWs.readyState === clientWs.OPEN) {
+            clientWs.send(JSON.stringify({ error: "អ្នកបានផ្អាកការនិយាយលើសពី ២ នាទី ដើម្បីសន្សំសំចៃប្រព័ន្ធ។ សូមភ្ជាប់ឡើងវិញបើចង់និយាយបន្ត" }));
+            clientWs.close();
+          }
+        }, 120000);
       }
 
-      // ចាប់ផ្ដើម Timer ភ្លាមៗពេលភ្ជាប់
       resetIdleTimeout();
 
-      // ④ កន្លែង ai.live.connect() ដែលប្រើ Loop ដើម្បីព្យាយាមភ្ជាប់ជាមួយ candidateKeys
       let connected = false;
 
       for (const key of candidateKeys) {
         try {
-          // បន្ថែម Log ថាកំពុងប្រើ Key មួយណា
-          console.log(
-            "Trying key:",
-            key.substring(0, 12) + "..."
-          );
+          console.log("Trying key:", key.substring(0, 12) + "...");
 
           const ai = new GoogleGenAI({
             apiKey: key,
@@ -443,7 +426,7 @@ Translation rules:
           });
 
           liveSession = await ai.live.connect({
-            model: chosenModel, // 💡 ដំណើរការទៅតាមម៉ូដែលដែលបានជ្រើសរើសខាងលើ
+            model: chosenModel,
             config: {
               responseModalities: [Modality.AUDIO],
               outputAudioTranscription: {},
@@ -472,21 +455,17 @@ Translation rules:
           break;
 
         } catch (err: any) {
-          // កែសម្រួលមិនឱ្យលាក់ Error ដើម្បីបង្ហាញមូលហេតុពិតនៅលើ Render Log
           console.error("Key failed:", err?.message || err);
         }
       }
 
       if (!connected) {
-        clientWs.send(JSON.stringify({
-          error: "No available Gemini API Key"
-        }));
+        clientWs.send(JSON.stringify({ error: "No available Gemini API Key" }));
         clientWs.close();
         return;
       }
 
       clientWs.on("message", (data) => {
-        // 🔥 រាល់ពេល User និយាយ ឬផ្ញើសារមក ឱ្យ reset ពេលវេលា ២ នាទីឡើងវិញ
         resetIdleTimeout();
 
         try {
@@ -502,7 +481,6 @@ Translation rules:
         }
       });
 
-      // 🔥 ផ្នែកទី ៣៖ កូដកាត់នាទីរបស់ User (ពេលគាត់បិទកម្មវិធី ឬដាច់លីង)
       clientWs.on("close", async () => {
         try {
           if (liveSession) {
@@ -513,18 +491,18 @@ Translation rules:
           console.error(e);
         }
         
-        clearTimeout(idleTimeoutTimer); // 🔥 លុប Timer ចោល ពេលគាត់បិទ
+        clearTimeout(idleTimeoutTimer);
 
         const endTime = Date.now();
-        const sessionMinutes = (endTime - startTime) / 1000 / 60; // គណនាជាំនាទី
+        const sessionMinutes = (endTime - startTime) / 1000 / 60;
 
         try {
-          if (sessionMinutes > 0.05) { // និយាយលើសពី ៣ វិនាទី ទើបកាត់ម៉ោង
+          if (sessionMinutes > 0.05) {
             await pool.query(
               "UPDATE users SET usedminutes = usedminutes + $1 WHERE userid = $2",
               [sessionMinutes, userId]
             );
-            console.log(`User ${userId} បាននិយាយអស់ ${sessionMinutes.toFixed(2)} នាទី。`);
+            console.log(`User ${userId} បាននិយាយអស់ ${sessionMinutes.toFixed(2)} នាទី។`);
           }
         } catch (err) {
           console.error("Error updating talk minutes:", err);
