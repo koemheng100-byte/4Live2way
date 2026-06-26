@@ -367,18 +367,6 @@ async function startServer() {
       const lang1Name = langNames[source] || source;
       const lang2Name = langNames[target] || target;
 
-      const systemInstruction = `
-You are a strict real-time translator.
-Selected language pair: A = ${lang1Name}, B = ${lang2Name}
-Translation rules:
-1. If the input is ${lang1Name}, translate ONLY to ${lang2Name}.
-2. If the input is ${lang2Name}, translate ONLY to ${lang1Name}.
-3. Any language other than ${lang1Name} or ${lang2Name} MUST ALWAYS be translated into ${lang2Name}.
-4. Never alternate translation direction. Never infer speaker roles.
-5. Never use conversation history to decide direction. Treat every utterance independently.
-6. Translate only. Never explain, answer, summarize, or chat.
-`;
-
       console.log(`Live 2-Way Interpreter Active: [${lang1Name} ↔ ${lang2Name}] for User: ${userId}`);
       
       let liveSession: any = null;
@@ -422,7 +410,31 @@ Translation rules:
               responseModalities: [Modality.AUDIO],
               outputAudioTranscription: {},
               inputAudioTranscription: {},
-              systemInstruction,
+              // បន្ថែមការកំណត់សំឡេង Aoede
+              generationConfig: {
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: "Aoede",
+                    },
+                  },
+                },
+              },
+              systemInstruction: `
+You are a strict, real-time, low-latency continuous translator.
+Selected language pair: A = ${lang1Name}, B = ${lang2Name}
+
+CRITICAL RULES FOR REAL-TIME STREAMING & TRANSLATION:
+1. If the input is ${lang1Name}, translate ONLY to ${lang2Name}.
+2. If the input is ${lang2Name}, translate ONLY to ${lang1Name}.
+3. Any language other than ${lang1Name} or ${lang2Name} MUST ALWAYS be translated into ${lang2Name}.
+4. Never alternate translation direction. Never infer speaker roles. Treat every utterance independently.
+5. Translate only. Never explain, answer, summarize, or chat.
+6. DO NOT wait for the speaker to finish their entire sentence or paragraph.
+7. Translate continuously chunk-by-chunk as soon as a phrase or meaningful clause is completed.
+8. Keep the translation flowing naturally and rapidly to maintain real-time sync with the speaker.
+9. Correct yourself smoothly in the next chunk if context changes, but prioritize speed and immediate translation.
+`,
             },
             callbacks: {
               onmessage: (message: any) => {
